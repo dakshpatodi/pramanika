@@ -5,6 +5,11 @@ Phase 2 scope: authentication routes (register, with login/logout/refresh
 following in later milestones) plus the app-wide exception handlers that
 give every endpoint - success or failure - the same response envelope.
 """
+
+from app.api.auth import router as auth_router
+from app.api.users import router as users_router
+from app.core.config import settings
+from app.core.exceptions import DomainError
 from slowapi.errors import RateLimitExceeded
 from app.core.rate_limit import limiter
 from fastapi import FastAPI, Request
@@ -15,6 +20,7 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api.auth import router as auth_router
+from app.api.users import router as users_router
 from app.core.config import settings
 from app.core.exceptions import DomainError
 
@@ -39,7 +45,7 @@ app.add_middleware(
 )
 
 app.include_router(auth_router)
-
+app.include_router(users_router)
 
 # --- Exception handlers -----------------------------------------------
 # These three handlers are what make EVERY error response - regardless of
