@@ -24,13 +24,23 @@ class TokenResponse(BaseModel):
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
-    user: UserResponse
-    """Included so the frontend doesn't have to immediately follow login
+
+
+class LoginResponse(TokenResponse):
+    """Extends TokenResponse with the user's own profile - used ONLY by
+    /login, not /refresh. Kept as a separate schema (rather than making
+    `user` an optional field on TokenResponse) so /refresh's response
+    shape never has to account for a field it doesn't have a value for.
+
+    Included so the frontend doesn't have to immediately follow login
     with a GET /users/me call just to render a name/avatar/role. Reuses
     the same UserResponse as the registration endpoint (never includes
     password_hash) rather than a second, slimmer schema - it's the
     account owner's own data being returned to them, so there's no
-    reason to trim it further here."""
+    reason to trim it further here.
+    """
+
+    user: UserResponse
 
 
 class RefreshRequest(BaseModel):

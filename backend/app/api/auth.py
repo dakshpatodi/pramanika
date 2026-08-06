@@ -16,7 +16,7 @@ from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
 from app.database.session import get_db
-from app.schemas.auth import LoginRequest, LogoutRequest, RefreshRequest, TokenResponse
+from app.schemas.auth import LoginRequest, LoginResponse, LogoutRequest, RefreshRequest, TokenResponse
 from app.schemas.common import APIResponse
 from app.schemas.user import UserCreate, UserResponse
 from app.services.auth_service import AuthService
@@ -42,23 +42,17 @@ def register(payload: UserCreate, db: Session = Depends(get_db)) -> APIResponse[
 
 @router.post(
     "/login",
-    response_model=APIResponse[TokenResponse],
+    response_model=APIResponse[LoginResponse],
     status_code=status.HTTP_200_OK,
     summary="Authenticate and receive an access/refresh token pair",
 )
-@limiter.limit("5/minute")
-def login(request: Request, payload: LoginRequest, db: Session = Depends(get_db)) -> APIResponse[TokenResponse]:
-    """Rate-limited to 5 attempts/minute per IP (see app/core/rate_limit.py).
-    `request: Request` must be a real parameter here, unused as it looks -
-    slowapi's decorator inspects the function signature for it to identify
-    the caller; removing it silently breaks the rate limit, it doesn't
-    raise an error."""
+def login(payload: LoginRequest, db: Session = Depends(get_db)) -> APIResponse[LoginResponse]:
     service = AuthService(db)
     access_token, refresh_token, user = service.login(payload.email, payload.password)
     return APIResponse(
         success=True,
         message="Login successful.",
-        data=TokenResponse(
+        data=LoginResponse(
             access_token=access_token,
             refresh_token=refresh_token,
             user=UserResponse.model_validate(user),
