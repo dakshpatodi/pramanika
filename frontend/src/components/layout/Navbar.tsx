@@ -1,10 +1,11 @@
 "use client";
-import Image from "next/image";
+
 import Link from "next/link";
 import { useState } from "react";
-import { Leaf, Menu, Search, ShoppingCart, X } from "lucide-react";
+import { Leaf, LogOut, Menu, Search, ShoppingCart, User as UserIcon, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/context/AuthContext";
 import { cn } from "@/lib/utils";
 
 const navLinks = [
@@ -17,23 +18,16 @@ const navLinks = [
 
 export function Navbar() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const { user, isLoading, isAuthenticated, logout } = useAuth();
 
   return (
     <header className="sticky top-0 z-50 border-b border-border/80 bg-background/90 backdrop-blur">
       <div className="container flex items-center justify-between py-4">
         <Link href="/" className="flex items-center gap-2" onClick={() => setIsMenuOpen(false)}>
-          <span className="flex h-10 w-10 items-center justify-center rounded-blob bg-primary text-primary-foreground overflow-hidden">
-             <Image 
-                src="/pramanika-logo.jpg" 
-                alt="Logo" 
-                width={60} 
-                height={60} 
-                className="object-contain" 
-                />
+          <span className="flex h-10 w-10 items-center justify-center rounded-blob bg-primary text-primary-foreground">
+            <Leaf className="h-5 w-5" strokeWidth={2} />
           </span>
-          <span className="font-display text-lg font-semibold text-foreground">
-            Pramanika
-          </span>
+          <span className="font-display text-lg font-semibold text-foreground">Pramanika</span>
         </Link>
 
         {/* Desktop nav */}
@@ -56,9 +50,29 @@ export function Navbar() {
           <Button variant="ghost" size="icon" aria-label="View cart">
             <ShoppingCart />
           </Button>
-          <Button variant="primary" size="md" className="hidden sm:inline-flex">
-            Login
-          </Button>
+
+          {isLoading ? (
+            // Session-restore check (Milestone 7) still in flight - avoids
+            // flashing "Login" for a split second before flipping to the
+            // logged-in state on every page load.
+            <span className="hidden h-10 w-24 animate-pulse rounded-full bg-muted sm:inline-block" />
+          ) : isAuthenticated && user ? (
+            <div className="hidden items-center gap-2 sm:flex">
+              <Button variant="ghost" size="md" asChild>
+                <Link href="/profile" className="flex items-center gap-2">
+                  <UserIcon className="h-4 w-4" />
+                  {user.first_name}
+                </Link>
+              </Button>
+              <Button variant="outline" size="icon" aria-label="Log out" onClick={() => logout()}>
+                <LogOut className="h-4 w-4" />
+              </Button>
+            </div>
+          ) : (
+            <Button variant="primary" size="md" className="hidden sm:inline-flex" asChild>
+              <Link href="/login">Login</Link>
+            </Button>
+          )}
 
           {/* Mobile menu toggle */}
           <Button
@@ -92,9 +106,38 @@ export function Navbar() {
               {link.label}
             </Link>
           ))}
-          <Button variant="primary" size="md" className="mt-2 w-full sm:hidden">
-            Login
-          </Button>
+
+          {isLoading ? null : isAuthenticated && user ? (
+            <div className="mt-2 flex flex-col gap-2">
+              <Button variant="outline" size="md" className="w-full" asChild onClick={() => setIsMenuOpen(false)}>
+                <Link href="/profile" className="flex items-center justify-center gap-2">
+                  <UserIcon className="h-4 w-4" />
+                  {user.first_name}
+                </Link>
+              </Button>
+              <Button
+                variant="primary"
+                size="md"
+                className="w-full"
+                onClick={() => {
+                  setIsMenuOpen(false);
+                  logout();
+                }}
+              >
+                Log Out
+              </Button>
+            </div>
+          ) : (
+            <Button
+              variant="primary"
+              size="md"
+              className="mt-2 w-full sm:hidden"
+              asChild
+              onClick={() => setIsMenuOpen(false)}
+            >
+              <Link href="/login">Login</Link>
+            </Button>
+          )}
         </nav>
       </div>
     </header>
