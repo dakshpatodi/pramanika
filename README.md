@@ -167,6 +167,11 @@ Interactive API docs are auto-generated at **http://localhost:8000/docs**.
 | `POSTGRES_PORT` | DB port | `5432` |
 | `POSTGRES_DB` | DB name | `healthy_harvest_db` |
 | `DATABASE_URL` | Optional full connection string; overrides the `POSTGRES_*` fields above | *(empty)* |
+|`SECRET_KEY` | Signs and verifies JWTs - must be a real random value in production |	(dev placeholder - see .env.example)
+|`ALGORITHM` |JWT signing algorithm|	HS256
+|`ACCESS_TOKEN_EXPIRE_MINUTES`|	How long an access token stays valid	| 30
+|`REFRESH_TOKEN_EXPIRE_DAYS` |	How long a refresh token stays valid before it must be used or re-issued |	7
+
 
 ## 8. What's Intentionally Not Here Yet
 
