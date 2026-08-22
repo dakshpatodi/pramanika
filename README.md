@@ -134,6 +134,10 @@ Visit **http://localhost:3000** to see the homepage.
 ```bash
 cd backend
 source venv/bin/activate
+**First time only:** apply database migrations before starting the server:
+```bash
+alembic upgrade head
+```
 uvicorn app.main:app --reload
 ```
 
@@ -144,6 +148,63 @@ Visit **http://localhost:8000** and you should see:
 ```
 
 Interactive API docs are auto-generated at **http://localhost:8000/docs**.
+
+## Authentication
+
+Phase 2 adds a full JWT-based authentication system on top of the Phase 1
+foundation - registration, login, protected routes, and role-based
+authorization.
+
+### Setup
+
+Authentication requires two extra one-time steps beyond the base setup:
+
+1. Apply the auth-related database migrations (creates `users`,
+   `revoked_tokens`, and adds `last_login`):
+```bash
+   cd backend
+   alembic upgrade head
+```
+2. Ensure `backend/.env` has the four JWT variables set (see Environment
+   Variables above) - the defaults work fine for local development.
+
+### JWT flow
+
+- **Access tokens** (30 min default) are sent as `Authorization: Bearer <token>`
+  on every request to a protected route (e.g. `GET /api/users/me`).
+- **Refresh tokens** (7 days default) are used only at `POST /api/auth/refresh`
+  to obtain a new token pair. Every refresh **rotates** the token: the one
+  just used is immediately revoked, so a stolen refresh token is only ever
+  usable once.
+- **Logout** (`POST /api/auth/logout`) revokes the current refresh token.
+  Revoked tokens are tracked in the `revoked_tokens` table by their `jti`
+  claim - access tokens are never checked against this table (by design;
+  see `app/models/revoked_token.py` for the tradeoff this implies).
+- The frontend's Axios client (`frontend/src/lib/axios.ts`) automates all of
+  this: it attaches the access token to every request, silently refreshes
+  and retries on a `401`, and forces a full logout if the refresh itself fails.
+
+Full request/response examples for every endpoint, a sequence diagram, and a
+Postman collection are in [`docs/testing.md`](./docs/testing.md) and
+[`docs/postman-collection.json`](./docs/postman-collection.json).
+
+### Endpoints
+
+| Method | Path | Auth required | Description |
+|---|---|---|---|
+| POST | `/api/auth/register` | No | Create a new customer account |
+| POST | `/api/auth/login` | No | Authenticate, receive access + refresh tokens |
+| POST | `/api/auth/refresh` | No (refresh token in body) | Rotate to a new token pair |
+| POST | `/api/auth/logout` | No (refresh token in body) | Revoke a refresh token |
+| GET | `/api/users/me` | Yes (access token) | Get the authenticated user's own profile |
+
+### Frontend pages
+
+| Route | Description |
+|---|---|
+| `/login` | Email/password login, "remember me", forgot-password placeholder |
+| `/register` | Account creation with live password-strength feedback |
+| `/profile` | Protected route - name, email, phone, role, status, member since, logout |
 
 ## 7. Environment Variables
 
