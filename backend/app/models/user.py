@@ -12,15 +12,21 @@ foreign key rather than being added as columns on this table.
 import enum
 import uuid
 from datetime import datetime
-from typing import Optional
+from typing import TYPE_CHECKING, List, Optional
 
 
 from sqlalchemy import Boolean, DateTime, Enum, String, func
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.session import Base
 
+if TYPE_CHECKING:
+    from app.models.address import Address
+    from app.models.cart import Cart
+    from app.models.order import Order
+    from app.models.review import Review
+    from app.models.wishlist import Wishlist
 
 class UserRole(str, enum.Enum):
     """Authorization roles.
@@ -84,6 +90,19 @@ class User(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
+
+        # --- Phase 3 additions: relationships only, no new columns on `users`. ---
+    addresses: Mapped[List["Address"]] = relationship(
+        "Address", back_populates="user", cascade="all, delete-orphan"
+    )
+    orders: Mapped[List["Order"]] = relationship("Order", back_populates="user")
+    cart: Mapped[Optional["Cart"]] = relationship(
+        "Cart", back_populates="user", uselist=False, cascade="all, delete-orphan"
+    )
+    wishlist: Mapped[Optional["Wishlist"]] = relationship(
+        "Wishlist", back_populates="user", uselist=False, cascade="all, delete-orphan"
+    )
+    reviews: Mapped[List["Review"]] = relationship("Review", back_populates="user")
 
     def __repr__(self) -> str:  # pragma: no cover - debugging aid only
         return f"<User id={self.id} email={self.email!r} role={self.role.value}>"
