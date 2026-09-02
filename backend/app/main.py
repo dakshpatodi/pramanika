@@ -19,10 +19,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from app.api.auth import router as auth_router
-from app.api.users import router as users_router
-from app.core.config import settings
-from app.core.exceptions import DomainError
 
 app = FastAPI(
     title=settings.APP_NAME,
