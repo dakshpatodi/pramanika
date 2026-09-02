@@ -1,6 +1,5 @@
 """
 Authentication endpoints.
-
 Milestone 3 added POST /api/auth/register. Milestone 4 adds
 POST /api/auth/login, POST /api/auth/refresh, and POST /api/auth/logout
 to this same router. None of these three require an Authorization
@@ -8,13 +7,10 @@ header - login takes credentials directly, and refresh/logout both take
 the refresh token in the request body. Protecting routes with an access
 token (a dependency like get_current_user) is Milestone 5's job.
 """
-
-
 from fastapi import APIRouter, Depends, Request, status
-from app.core.rate_limit import limiter
-from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
+from app.core.rate_limit import limiter
 from app.database.session import get_db
 from app.schemas.auth import LoginRequest, LoginResponse, LogoutRequest, RefreshRequest, TokenResponse
 from app.schemas.common import APIResponse
@@ -46,7 +42,13 @@ def register(payload: UserCreate, db: Session = Depends(get_db)) -> APIResponse[
     status_code=status.HTTP_200_OK,
     summary="Authenticate and receive an access/refresh token pair",
 )
-def login(payload: LoginRequest, db: Session = Depends(get_db)) -> APIResponse[LoginResponse]:
+@limiter.limit("5/minute")
+def login(request: Request, payload: LoginRequest, db: Session = Depends(get_db)) -> APIResponse[LoginResponse]:
+    """Rate-limited to 5 attempts/minute per IP (see app/core/rate_limit.py).
+    `request: Request` must be a real parameter here, unused as it looks -
+    slowapi's decorator inspects the function signature for it to identify
+    the caller; removing it silently breaks the rate limit, it doesn't
+    raise an error."""
     service = AuthService(db)
     access_token, refresh_token, user = service.login(payload.email, payload.password)
     return APIResponse(
