@@ -71,3 +71,15 @@ class InvalidRefreshTokenError(DomainError):
 
     def __init__(self):
         super().__init__("Refresh token is invalid, expired, or has already been used.")
+
+
+class ProductNotFoundError(DomainError):
+    http_status = 404
+    def __init__(self, identifier: str):
+        super().__init__(f"Product '{identifier}' was not found.")
+
+
+class CategoryNotFoundError(DomainError):
+    http_status = 404
+    def __init__(self, slug: str):
+        super().__init__(f"Category '{slug}' was not found.")
