@@ -108,6 +108,71 @@ Do not break Phase 2 authentication.
 Use existing SQLAlchemy/Alembic architecture.
 Do not implement Phase 4+ functionality during Phase 3.
 
+## Phase 4 — Product Module
+
+Goal:
+Customer-facing product browsing - listing, detail, categories, search,
+filtering, sorting, pagination, related products.
+
+Status: Backend complete and tested. Frontend not started.
+
+No schema changes required - Phase 3's Product/Category/Inventory models
+already supported everything needed. No new migration.
+
+### Backend endpoints
+
+GET /api/products
+  Query params: page, page_size, search, category, min_price, max_price,
+  in_stock, sort (newest | price_asc | price_desc | name_asc | name_desc)
+  Returns: products[], pagination { total, page, page_size, total_pages,
+  has_next, has_previous }
+
+GET /api/products/{slug}
+  Returns: full product detail + related_products[] (same category,
+  excludes self, active only, newest-first, limit 4)
+
+GET /api/categories
+  Returns: active categories with product_count
+
+GET /api/categories/{slug}
+  Returns: single category
+
+All four are public - no authentication required.
+
+### Design decisions
+
+- Slug-based routing, not UUID-based, for both products and categories.
+- Stock is exposed as booleans (in_stock, low_stock) only - never raw
+  quantity/reserved_quantity. Exact stock counts are treated as
+  internal/competitive information.
+- Sort options are a whitelisted enum - no arbitrary order-by strings
+  ever reach the database.
+- An unmatched ?category= filter value returns 200 with an empty list
+  (it's a filter, not a resource lookup). A genuinely unknown category
+  slug at GET /api/categories/{slug} returns 404 (it IS a resource
+  lookup). Same distinction applies to products.
+- "Add to Cart" is an intentional placeholder on the frontend - full
+  cart logic is Phase 5, not built here.
+
+### Testing performed
+
+13-case PowerShell smoke test (backend/phase4_smoke_test.ps1) covering
+listing, pagination, search, category filter, price filter, in_stock
+filter, availability display, sorting, combined filters, product detail
+with related products, both 404 cases, category listing with counts,
+unmatched-filter-returns-empty behavior, and 4 invalid-parameter 422
+cases. All passed against real seeded data (backend/scripts/seed_products.py,
+idempotent, 5 categories / 7 products).
+
+Auth regression re-verified after this phase's main.py changes (5x
+failed login -> 401, 6th -> 429) - rate limiting confirmed intact.
+
+### Seed data
+
+backend/scripts/seed_products.py - run via `python -m scripts.seed_products`
+from backend/ with the venv active. Idempotent (checked by slug), safe
+to re-run. Not imported anywhere by the running app.
+
 ## Original Roadmap
 
 Phase 3 — Database
