@@ -4,7 +4,7 @@ Cart and CartItem ORM models.
 
 import uuid
 from datetime import datetime
-from typing import TYPE_CHECKING, List
+from typing import TYPE_CHECKING, List, Optional
 
 from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Integer, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import UUID
@@ -13,6 +13,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database.session import Base
 
 if TYPE_CHECKING:
+    from app.models.coupon import Coupon
     from app.models.product import Product
     from app.models.user import User
 
@@ -34,6 +35,9 @@ class Cart(Base):
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False
     )
+    coupon_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("coupons.id", ondelete="SET NULL"), nullable=True
+    )
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
@@ -44,6 +48,7 @@ class Cart(Base):
     items: Mapped[List["CartItem"]] = relationship(
         "CartItem", back_populates="cart", cascade="all, delete-orphan"
     )
+    coupon: Mapped[Optional["Coupon"]] = relationship("Coupon", back_populates="carts")
 
     def __repr__(self) -> str:  # pragma: no cover
         return f"<Cart id={self.id} user_id={self.user_id}>"

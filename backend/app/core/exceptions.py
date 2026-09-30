@@ -83,3 +83,37 @@ class CategoryNotFoundError(DomainError):
     http_status = 404
     def __init__(self, slug: str):
         super().__init__(f"Category '{slug}' was not found.")
+
+
+# --- Phase 5: Cart ---------------------------------------------------
+
+class CartItemNotFoundError(DomainError):
+    """Same error whether the item id doesn't exist at all or belongs to
+    someone else's cart - distinguishing them would let a client probe
+    for valid cart_item ids belonging to other users."""
+
+    http_status = 404
+
+    def __init__(self):
+        super().__init__("Cart item was not found.")
+
+
+class InsufficientStockError(DomainError):
+    http_status = 409
+
+    def __init__(self, available: int):
+        if available <= 0:
+            super().__init__("This product is currently out of stock.")
+        else:
+            super().__init__(f"Only {available} unit(s) available in stock.")
+
+
+class InvalidCouponError(DomainError):
+    """Every way a coupon can fail to apply (not found, inactive, not
+    started, expired, usage limit reached, below minimum order) - the
+    service passes the specific reason as the message."""
+
+    http_status = 400
+
+    def __init__(self, message: str):
+        super().__init__(message)

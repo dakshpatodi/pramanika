@@ -47,6 +47,11 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
+        # --- Phase 5: Cart pricing ---
+    GST_RATE: float = 0.05
+    FREE_DELIVERY_THRESHOLD: float = 500.0
+    DELIVERY_CHARGE: float = 49.0
+
     @computed_field
     @property
     def SQLALCHEMY_DATABASE_URL(self) -> str:

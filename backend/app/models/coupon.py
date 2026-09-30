@@ -14,6 +14,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database.session import Base
 
 if TYPE_CHECKING:
+    from app.models.cart import Cart
     from app.models.order import Order
 
 
@@ -67,6 +68,7 @@ class Coupon(Base):
     )
 
     orders: Mapped[List["Order"]] = relationship("Order", back_populates="coupon")
+    carts: Mapped[List["Cart"]] = relationship("Cart", back_populates="coupon")
 
     __table_args__ = (
         CheckConstraint("discount_value > 0", name="ck_coupons_discount_value_positive"),
