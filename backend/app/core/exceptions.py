@@ -85,12 +85,10 @@ class CategoryNotFoundError(DomainError):
         super().__init__(f"Category '{slug}' was not found.")
 
 
-# --- Phase 5: Cart ---------------------------------------------------
-
 class CartItemNotFoundError(DomainError):
-    """Same error whether the item id doesn't exist at all or belongs to
-    someone else's cart - distinguishing them would let a client probe
-    for valid cart_item ids belonging to other users."""
+    """Raised both when the item id does not exist and when it belongs to
+    someone else's cart - deliberately the same error, so the endpoint
+    cannot be used to probe which item ids exist."""
 
     http_status = 404
 
@@ -98,22 +96,35 @@ class CartItemNotFoundError(DomainError):
         super().__init__("Cart item was not found.")
 
 
+class ProductUnavailableError(DomainError):
+    """The product does not exist or has been deactivated. One error for
+    both, matching the catalogue, which hides inactive products entirely."""
+
+    http_status = 404
+
+    def __init__(self):
+        super().__init__("This product is not available.")
+
+
 class InsufficientStockError(DomainError):
     http_status = 409
 
-    def __init__(self, available: int):
+    def __init__(self, available: int, in_cart: int = 0):
         if available <= 0:
-            super().__init__("This product is currently out of stock.")
+            message = "This product is currently out of stock."
+        elif in_cart > 0:
+            message = (
+                f"You already have {in_cart} in your cart - "
+                f"only {available} {'unit is' if available == 1 else 'units are'} available in total."
+            )
         else:
-            super().__init__(f"Only {available} unit(s) available in stock.")
+            message = f"Only {available} {'unit is' if available == 1 else 'units are'} available in stock."
+        super().__init__(message)
+        self.available = available
 
 
 class InvalidCouponError(DomainError):
-    """Every way a coupon can fail to apply (not found, inactive, not
-    started, expired, usage limit reached, below minimum order) - the
-    service passes the specific reason as the message."""
-
     http_status = 400
 
-    def __init__(self, message: str):
+    def __init__(self, message: str = "Invalid coupon code."):
         super().__init__(message)
