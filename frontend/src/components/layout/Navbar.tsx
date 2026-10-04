@@ -2,10 +2,12 @@
 
 import Link from "next/link";
 import { useState } from "react";
+
 import { Leaf, LogOut, Menu, Search, ShoppingCart, User as UserIcon, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/context/AuthContext";
+import { useCart } from "@/context/CartContext";
 import { cn } from "@/lib/utils";
 
 const navLinks = [
@@ -19,6 +21,7 @@ const navLinks = [
 export function Navbar() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const { user, isLoading, isAuthenticated, logout } = useAuth();
+  const { itemCount } = useCart();   // directly under: const { user, isLoading, isAuthenticated, logout } = useAuth();
 
   return (
     <header className="sticky top-0 z-50 border-b border-border/80 bg-background/90 backdrop-blur">
@@ -47,8 +50,15 @@ export function Navbar() {
           <Button variant="ghost" size="icon" aria-label="Search products" className="hidden sm:inline-flex">
             <Search />
           </Button>
-          <Button variant="ghost" size="icon" aria-label="View cart">
-            <ShoppingCart />
+          <Button variant="ghost" size="icon" className="relative" asChild>
+             <Link href="/cart" aria-label={itemCount > 0 ? `View cart, ${itemCount} items` : "View cart"}>
+                <ShoppingCart />
+                {itemCount > 0 && (
+                  <span className="absolute -right-0.5 -top-0.5 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-accent px-1 text-[11px] font-bold leading-none text-accent-foreground">
+                     {itemCount > 99 ? "99+" : itemCount}
+                 </span>
+                )}
+              </Link>
           </Button>
 
           {isLoading ? (

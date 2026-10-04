@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { AuthProvider } from "@/context/AuthContext";
+import { CartProvider } from "@/context/CartContext";
 import { Fraunces, Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 
@@ -37,11 +38,13 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${fraunces.variable} ${jakarta.variable}`}>
       <body>
-      <AuthProvider>
-      <Navbar />
-       <main>{children}</main>
-       <Footer />
-      </AuthProvider>
+       <AuthProvider>
+        <CartProvider>
+          <Navbar />
+          <main>{children}</main>
+          <Footer />
+        </CartProvider>
+       </AuthProvider>
       </body>
     </html>
   );

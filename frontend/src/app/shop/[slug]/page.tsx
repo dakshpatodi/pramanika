@@ -2,15 +2,21 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, usePathname, useRouter } from "next/navigation";
 import { AlertTriangle, ArrowLeft, Check, Minus, Plus, ShoppingCart, XCircle } from "lucide-react";
 
 import { ProductCard } from "@/components/products/ProductCard";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/context/AuthContext";
+import { useCart } from "@/context/CartContext";
 import { getCategoryIcon } from "@/lib/category-icons";
+import { getApiErrorMessage } from "@/lib/errors";
 import { formatPrice } from "@/lib/utils";
 import { getProduct } from "@/services/products";
 import type { ProductDetail } from "@/types/product";
+
+/** The cart API rejects a single request for more than this many units. */
+const MAX_QUANTITY = 1000;
 
 export default function ProductDetailPage() {
   const params = useParams<{ slug: string }>();
@@ -19,12 +25,56 @@ export default function ProductDetailPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [quantity, setQuantity] = useState(1);
-  const [showCartNote, setShowCartNote] = useState(false);
+  const [isAdding, setIsAdding] = useState(false);
+  const [feedback, setFeedback] = useState<{ productId: string; type: "success" | "error"; message: string } | null>(
+    null
+  );
+
+  const router = useRouter();
+  const pathname = usePathname();
+  const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
+  const { addItem } = useCart();
+
+  async function handleAddToCart() {
+    if (!product) return;
+
+    // Carts belong to accounts. Send guests to log in and bring them
+    // straight back to this product afterwards.
+    if (!isAuthenticated) {
+      router.push(`/login?redirect=${encodeURIComponent(pathname)}`);
+      return;
+    }
+
+    const productId = product.id;
+    const added = quantity;
+    setFeedback(null);
+    setIsAdding(true);
+    try {
+      await addItem(productId, added);
+      setQuantity(1);
+      setFeedback({
+        productId,
+        type: "success",
+        message: `Added ${added} \u00d7 ${product.name} to your cart.`,
+      });
+    } catch (error) {
+      // e.g. "Only 5 units are available in stock." - the server decides.
+      setFeedback({
+        productId,
+        type: "error",
+        message: getApiErrorMessage(error, "We couldn't add this to your cart. Please try again."),
+      });
+    } finally {
+      setIsAdding(false);
+    }
+  }
 
   useEffect(() => {
     let isMounted = true;
     setIsLoading(true);
     setNotFound(false);
+    setFeedback(null);
+    setQuantity(1);
 
     getProduct(params.slug)
       .then((data) => {
@@ -134,11 +184,8 @@ export default function ProductDetailPage() {
               )}
             </div>
 
-            {/* Quantity selector + Add to Cart - PRESENTATIONAL ONLY.
-                Phase 5 builds the real cart; this button doesn't call any
-                cart API. Same "honest placeholder" pattern as the
-                forgot-password link in Milestone 6, rather than either
-                faking real cart behavior or hiding the button entirely. */}
+                {/* Quantity selector + Add to Cart. The server checks stock and
+                decides how many can be added; its message is shown below. */}
             {product.in_stock ? (
               <div className="flex items-center gap-4">
                 <div className="flex items-center rounded-full border border-border">
@@ -153,7 +200,7 @@ export default function ProductDetailPage() {
                   <span className="w-8 text-center text-sm font-semibold">{quantity}</span>
                   <button
                     type="button"
-                    onClick={() => setQuantity((q) => q + 1)}
+                    onClick={() => setQuantity((q) => Math.min(MAX_QUANTITY, q + 1))}
                     className="flex h-11 w-11 items-center justify-center text-foreground hover:text-primary"
                     aria-label="Increase quantity"
                   >
@@ -161,16 +208,35 @@ export default function ProductDetailPage() {
                   </button>
                 </div>
 
-                <Button variant="primary" size="lg" className="flex-1" onClick={() => setShowCartNote(true)}>
-                  <ShoppingCart className="h-4 w-4" /> Add to Cart
+                <Button
+                  variant="primary"
+                  size="lg"
+                  className="flex-1"
+                  onClick={handleAddToCart}
+                  disabled={isAdding || isAuthLoading}
+                >
+                  <ShoppingCart className="h-4 w-4" /> {isAdding ? "Adding..." : "Add to Cart"}
                 </Button>
               </div>
             ) : null}
 
-            {showCartNote ? (
-              <p className="text-sm text-muted-foreground">
-                Cart is coming soon - this button doesn&apos;t add anything yet.
-              </p>
+            {product.in_stock && !isAuthenticated && !isAuthLoading ? (
+              <p className="text-sm text-muted-foreground">Log in to add items to your cart.</p>
+            ) : null}
+
+            {feedback && feedback.productId === product.id ? (
+              feedback.type === "success" ? (
+                <p role="status" className="flex flex-wrap items-center gap-x-2 text-sm font-medium text-primary">
+                  <Check className="h-4 w-4" /> {feedback.message}
+                  <Link href="/cart" className="font-semibold underline underline-offset-4 hover:text-primary-dark">
+                    View cart
+                  </Link>
+                </p>
+              ) : (
+                <p role="alert" className="flex items-start gap-2 text-sm text-foreground">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-accent-dark" /> {feedback.message}
+                </p>
+              )
             ) : null}
 
             <dl className="grid grid-cols-2 gap-4 border-t border-border pt-5 text-sm">
