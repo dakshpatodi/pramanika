@@ -128,3 +128,68 @@ class InvalidCouponError(DomainError):
 
     def __init__(self, message: str = "Invalid coupon code."):
         super().__init__(message)
+
+
+
+# --- Phase 6: Checkout and orders ------------------------------------
+
+class EmptyCartError(DomainError):
+    http_status = 400
+
+    def __init__(self):
+        super().__init__("Your cart is empty. Add something before checking out.")
+
+
+class AddressNotFoundError(DomainError):
+    """The address does not exist OR belongs to another customer - one
+    error for both, so the endpoint can't be used to probe address ids."""
+
+    http_status = 404
+
+    def __init__(self):
+        super().__init__("Delivery address was not found.")
+
+
+class CartIssuesError(DomainError):
+    """At least one cart line cannot be bought as it stands (out of stock,
+    more than is available, product deactivated). The cart page already
+    shows which; the message names the first one."""
+
+    http_status = 409
+
+    def __init__(self, message: str):
+        super().__init__(message)
+
+
+class CartChangedError(DomainError):
+    """The total the customer saw is no longer the total the server
+    calculates (a price, coupon or delivery rule changed in between).
+    Nothing was ordered; the customer must review and confirm again."""
+
+    http_status = 409
+
+    def __init__(self):
+        super().__init__("Prices in your cart have changed. Please review the updated total and try again.")
+
+
+class IdempotencyKeyReusedError(DomainError):
+    http_status = 409
+
+    def __init__(self):
+        super().__init__("This Idempotency-Key was already used for a different checkout request.")
+
+
+class OrderNotFoundError(DomainError):
+    """Not found OR not yours - the same error for both."""
+
+    http_status = 404
+
+    def __init__(self):
+        super().__init__("Order was not found.")
+
+
+class OrderNotCancellableError(DomainError):
+    http_status = 409
+
+    def __init__(self, status: str):
+        super().__init__(f"An order that is {status} can no longer be cancelled.")

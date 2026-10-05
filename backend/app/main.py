@@ -16,6 +16,8 @@ from fastapi.responses import JSONResponse
 from slowapi.errors import RateLimitExceeded
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from app.api import orders
+from app.api import addresses
 from app.api.auth import router as auth_router
 from app.api.categories import router as categories_router
 from app.api.products import router as products_router
@@ -50,6 +52,8 @@ app.include_router(users_router)
 app.include_router(categories_router)
 app.include_router(products_router)
 app.include_router(cart_router)
+app.include_router(addresses.router)
+app.include_router(orders.router)
 
 # --- Exception handlers -----------------------------------------------
 # These four handlers are what make EVERY response - regardless of where

@@ -73,6 +73,10 @@ class Coupon(Base):
     __table_args__ = (
         CheckConstraint("discount_value > 0", name="ck_coupons_discount_value_positive"),
         CheckConstraint("used_count >= 0", name="ck_coupons_used_count_non_negative"),
+        # Phase 6: a limited coupon can never be used more often than its
+        # limit. Checkout increments `used_count` under a row lock; this is
+        # the database-level backstop.
+        CheckConstraint("usage_limit IS NULL OR used_count <= usage_limit", name="ck_coupons_used_within_limit"),
     )
 
     def __repr__(self) -> str:  # pragma: no cover

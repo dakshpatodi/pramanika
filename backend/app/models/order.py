@@ -7,7 +7,7 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING, List, Optional
 
-from sqlalchemy import CheckConstraint, DateTime, Enum, ForeignKey, Integer, Numeric, String, func
+from sqlalchemy import CheckConstraint, DateTime, Enum, ForeignKey, Index, Integer, Numeric, Sequence, String, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -47,6 +47,36 @@ class OrderPaymentStatus(str, enum.Enum):
     PAID = "paid"
     FAILED = "failed"
     REFUNDED = "refunded"
+
+
+class OrderInventoryState(str, enum.Enum):
+    """Where this order's stock reservation stands (Phase 6).
+
+    Checkout adds the order's quantities to `Inventory.reserved_quantity`
+    and records RESERVED. From there exactly ONE of two things can ever
+    happen, enforced by a compare-and-set on this column (see
+    `OrderService`/`InventoryService`), which is what makes a double
+    release or a double consume impossible:
+
+      RESERVED -> RELEASED   order cancelled / payment failed:
+                             reserved_quantity goes back down
+      RESERVED -> CONSUMED   payment confirmed (Phase 7):
+                             quantity and reserved_quantity both go down
+
+    RELEASED is also the value for orders that predate reservations -
+    they hold nothing, so there is nothing to release.
+    """
+
+    RESERVED = "reserved"
+    RELEASED = "released"
+    CONSUMED = "consumed"
+
+
+# Human-facing order numbers (PRM-2026-000123) come from this sequence.
+# A sequence rather than MAX(order_number)+1 so two simultaneous checkouts
+# can never be handed the same number. Gaps (from rolled-back checkouts)
+# are expected and harmless.
+order_number_seq = Sequence("order_number_seq", start=1, metadata=Base.metadata)
 
 
 class Order(Base):
@@ -100,6 +130,18 @@ class Order(Base):
     delivery_charge: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False, default=0, server_default="0")
     total_amount: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
 
+        # --- Phase 6: pricing snapshot --------------------------------------
+    taxable_amount: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False, default=0, server_default="0")
+    """Subtotal minus the coupon discount - the amount GST was charged on."""
+
+    gst_rate: Mapped[float] = mapped_column(Numeric(5, 4), nullable=False, default=0, server_default="0")
+    """The GST rate in force when the order was placed (0.0500 = 5%), so
+    the order stays explainable after `GST_RATE` is changed."""
+
+    coupon_code: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    """Code of the coupon used. `coupon_id` is ON DELETE SET NULL, so the
+    code is copied here to keep the order history readable."""
+
     coupon_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True), ForeignKey("coupons.id", ondelete="SET NULL"), nullable=True
     )
@@ -119,8 +161,34 @@ class Order(Base):
         ),
         nullable=False,
         default=OrderPaymentStatus.PENDING,
-        server_default=OrderPaymentStatus.PENDING.value,
+                server_default=OrderPaymentStatus.PENDING.value,
     )
+
+    # --- Phase 6: reservation + idempotency -----------------------------
+    inventory_state: Mapped[OrderInventoryState] = mapped_column(
+        Enum(
+            OrderInventoryState,
+            name="order_inventory_state",
+            native_enum=True,
+            values_callable=lambda e: [m.value for m in e],
+        ),
+        nullable=False,
+        default=OrderInventoryState.RESERVED,
+        server_default=OrderInventoryState.RELEASED.value,
+    )
+    """Python default RESERVED (checkout always reserves); the database
+    default RELEASED only matters for rows that existed before this column
+    did - they never reserved anything."""
+
+    idempotency_key: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    request_fingerprint: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    """The client's `Idempotency-Key` for the checkout request that created
+    this order, plus a hash of that request's body. Unique per user (see
+    the partial unique index below), so a retried or concurrent duplicate
+    submission can never create a second order: the database refuses it.
+    The order itself is the stored result of the original request."""
+
+    cancelled_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
@@ -137,7 +205,15 @@ class Order(Base):
 
     __table_args__ = (
         CheckConstraint("subtotal >= 0", name="ck_orders_subtotal_non_negative"),
-        CheckConstraint("total_amount >= 0", name="ck_orders_total_amount_non_negative"),
+                CheckConstraint("total_amount >= 0", name="ck_orders_total_amount_non_negative"),
+        CheckConstraint("taxable_amount >= 0", name="ck_orders_taxable_amount_non_negative"),
+        Index(
+            "uq_orders_user_id_idempotency_key",
+            "user_id",
+            "idempotency_key",
+            unique=True,
+            postgresql_where="idempotency_key IS NOT NULL",
+        ),
     )
 
     def __repr__(self) -> str:  # pragma: no cover

@@ -19,7 +19,7 @@ from app.models.cart import Cart, CartItem
 from app.models.category import Category
 from app.models.coupon import Coupon, DiscountType
 from app.models.inventory import Inventory
-from app.models.order import Order, OrderItem, OrderPaymentStatus, OrderStatus
+from app.models.order import Order, OrderInventoryState, OrderItem, OrderPaymentStatus, OrderStatus
 from app.models.payment import Payment, PaymentTransactionStatus
 from app.models.product import Product, WeightUnit
 from app.models.review import Review
@@ -43,6 +43,7 @@ __all__ = [
     "Order",
     "OrderItem",
     "OrderStatus",
+    "OrderInventoryState",
     "OrderPaymentStatus",
     "Coupon",
     "DiscountType",

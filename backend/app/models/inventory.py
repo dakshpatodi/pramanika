@@ -53,6 +53,10 @@ class Inventory(Base):
     __table_args__ = (
         CheckConstraint("quantity >= 0", name="ck_inventory_quantity_non_negative"),
         CheckConstraint("reserved_quantity >= 0", name="ck_inventory_reserved_quantity_non_negative"),
+        # Phase 6: reservations can never exceed physical stock. Checkout's
+        # reservation UPDATE already refuses to oversell; this makes the
+        # same promise at the database level for every other writer.
+        CheckConstraint("reserved_quantity <= quantity", name="ck_inventory_reserved_within_quantity"),
     )
 
     def __repr__(self) -> str:  # pragma: no cover
