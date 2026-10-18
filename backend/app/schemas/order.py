@@ -13,7 +13,7 @@ from typing import List, Optional
 
 from pydantic import BaseModel, Field
 
-from app.models import OrderPaymentStatus, OrderStatus
+from app.models import OrderCancellationReason, OrderPaymentStatus, OrderStatus
 from app.schemas.product import PaginationMeta
 
 
@@ -63,12 +63,34 @@ class OrderShippingAddressResponse(BaseModel):
     country: Optional[str] = None
 
 
+class OrderPaymentInfo(BaseModel):
+    """What the customer may be told about the payment attempts on an order.
+    No gateway ids, no amounts, no failure text from the bank."""
+
+    last_attempt: Optional[str] = None
+    """Status of the most recent Razorpay attempt: initiated, authorized,
+    failed, expired, captured, refunded - or null if none was ever started.
+    "failed" on a payable order means: the last try did not go through, try again."""
+    refund_pending: bool = False
+    """True if money was received for this order AFTER it closed (cancelled or
+    expired) and is waiting to be refunded."""
+
+
 class OrderResponse(BaseModel):
     id: uuid.UUID
     order_number: Optional[str] = None
     status: OrderStatus
     payment_status: OrderPaymentStatus
     can_cancel: bool
+    can_pay: bool
+    """The server's verdict: a payment may be started (or resumed) on this order
+    right now. False for paid, cancelled, expired - and for an order past its
+    deadline that the expiry job has not reached yet."""
+    expires_at: Optional[datetime] = None
+    """When an unpaid order stops being payable and releases its stock."""
+    cancellation_reason: Optional[OrderCancellationReason] = None
+    """Why a cancelled order was cancelled: "customer" or "expired"."""
+    payment: OrderPaymentInfo
     coupon_code: Optional[str] = None
     items: List[OrderItemResponse]
     item_count: int
@@ -85,8 +107,14 @@ class OrderSummaryResponse(BaseModel):
     order_number: Optional[str] = None
     status: OrderStatus
     payment_status: OrderPaymentStatus
+    can_pay: bool
+    expires_at: Optional[datetime] = None
+    cancellation_reason: Optional[OrderCancellationReason] = None
     total: float
     item_count: int
+    """Total units across all lines."""
+    line_count: int
+    """Number of different products (lines) in the order."""
     item_names: List[str]
     """Up to the first three product names, for a one-line description."""
     created_at: datetime

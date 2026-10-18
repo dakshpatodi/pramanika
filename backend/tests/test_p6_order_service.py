@@ -332,6 +332,7 @@ class OrderReadTests(CheckoutTestCase):
         self.assertEqual((beyond.orders, beyond.pagination.total), ([], 5))
         self.assertEqual(page1.orders[0].item_count, 5)
         self.assertEqual(page1.orders[0].item_names, ["Oats"])
+        self.assertEqual(page1.orders[0].line_count, 1)  # five UNITS of one product is one line
         self.assertEqual(page1.orders[0].total, 5 * 100 + 25.0 + 0.0)  # 500 (>=500 so free delivery) + 5% GST
 
     def test_empty_history(self):

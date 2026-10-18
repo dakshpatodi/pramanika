@@ -6,33 +6,38 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test": "vitest"
   },
   "dependencies": {
+    "@hookform/resolvers": "^3.9.1",
+    "@radix-ui/react-slot": "^1.1.1",
+    "axios": "^1.7.9",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "framer-motion": "^11.15.0",
+    "lucide-react": "^0.469.0",
     "next": "^15.1.9",
     "react": "19.0.0",
     "react-dom": "19.0.0",
-    "framer-motion": "^11.15.0",
-    "lucide-react": "^0.469.0",
-    "clsx": "^2.1.1",
-    "class-variance-authority": "^0.7.1",
-    "tailwind-merge": "^2.6.0",
-    "@radix-ui/react-slot": "^1.1.1",
-    "axios": "^1.7.9",
     "react-hook-form": "^7.54.2",
-    "zod": "^3.24.1",
-    "@hookform/resolvers": "^3.9.1"
+    "tailwind-merge": "^2.6.0",
+    "zod": "^3.24.1"
   },
   "devDependencies": {
-    "typescript": "^5.7.2",
+    "@eslint/eslintrc": "^3.2.0",
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.3",
     "@types/node": "^22.10.5",
     "@types/react": "^19.0.2",
     "@types/react-dom": "^19.0.2",
+    "autoprefixer": "^10.4.20",
     "eslint": "^9.17.0",
     "eslint-config-next": "^15.1.9",
-    "@eslint/eslintrc": "^3.2.0",
-    "tailwindcss": "^3.4.17",
+    "jsdom": "^29.1.1",
     "postcss": "^8.4.49",
-    "autoprefixer": "^10.4.20"
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.7.2",
+    "vitest": "^5.0.3"
   }
 }

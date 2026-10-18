@@ -1,4 +1,3 @@
-import { Button } from "@/components/ui/button";
 import { formatMoney, formatPercent } from "@/lib/money";
 import type { Cart } from "@/types/cart";
 
@@ -6,6 +5,8 @@ interface CartSummaryProps {
   cart: Cart;
   /** Rendered above the totals - the page puts the coupon box here. */
   children?: React.ReactNode;
+  /** Rendered below the totals - the cart page puts "Proceed to checkout" here, the checkout page "Place order". */
+  action?: React.ReactNode;
 }
 
 function Row({ label, value, muted = false }: { label: string; value: React.ReactNode; muted?: boolean }) {
@@ -22,7 +23,7 @@ function Row({ label, value, muted = false }: { label: string; value: React.Reac
  * server calculated it - nothing here adds, multiplies or rounds, so the
  * page can never disagree with what checkout will charge.
  */
-export function CartSummary({ cart, children }: CartSummaryProps) {
+export function CartSummary({ cart, children, action }: CartSummaryProps) {
   const { totals, coupon } = cart;
   const couponApplied = coupon !== null && coupon.applied;
 
@@ -64,11 +65,7 @@ export function CartSummary({ cart, children }: CartSummaryProps) {
         </p>
       ) : null}
 
-      {/* Honest placeholder until Phase 6 builds checkout - same pattern as
-          the disabled-with-explanation controls in earlier phases. */}
-      <Button variant="primary" size="lg" disabled className="w-full">
-        Checkout coming soon
-      </Button>
+      {action}
     </aside>
   );
 }

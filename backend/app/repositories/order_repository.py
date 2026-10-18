@@ -20,7 +20,7 @@ from typing import List, Optional, Tuple
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session, selectinload
 
-from app.models import Order, OrderInventoryState, OrderPaymentStatus, OrderStatus
+from app.models import Order, OrderCancellationReason, OrderInventoryState, OrderPaymentStatus, OrderStatus
 from app.models.order import order_number_seq
 from app.services.order_rules import format_order_number
 
@@ -106,9 +106,42 @@ class OrderRepository:
             )
             .values(
                 status=OrderStatus.CANCELLED,
+                cancellation_reason=OrderCancellationReason.CUSTOMER,
                 inventory_state=OrderInventoryState.RELEASED,
                 cancelled_at=now,
             )
             .execution_options(synchronize_session=False)
         )
         return result.rowcount == 1
+
+    def mark_paid(self, order_id: uuid.UUID) -> bool:
+        """Mark an order paid (and confirmed) only if it is still pending,
+        unpaid and holding its reservation - one atomic statement, the mirror
+        image of `cancel_pending`. Against a cancel, exactly one of the two
+        wins: whichever runs second finds the condition false and changes
+        nothing. True if this call paid the order."""
+        result = self.db.execute(
+            update(Order)
+            .where(
+                Order.id == order_id,
+                Order.status == OrderStatus.PENDING,
+                Order.payment_status == OrderPaymentStatus.PENDING,
+                Order.inventory_state == OrderInventoryState.RESERVED,
+            )
+            .values(status=OrderStatus.CONFIRMED, payment_status=OrderPaymentStatus.PAID)
+            .execution_options(synchronize_session=False)
+        )
+        return result.rowcount == 1
+
+    def get_for_update(self, order_id: uuid.UUID) -> Optional[Order]:
+        """Lock an order by id alone (no owner). For callers that act for the
+        system rather than a customer: the Razorpay webhook (M7) and the expiry
+        job (M8). Always lock the order BEFORE its payment row."""
+        return (
+            self.db.query(Order)
+            .options(selectinload(Order.items))
+            .filter(Order.id == order_id)
+            .with_for_update(of=Order)
+            .populate_existing()
+            .first()
+        )

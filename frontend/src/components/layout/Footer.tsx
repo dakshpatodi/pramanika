@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { Facebook, Instagram, Leaf, Mail, MapPin, Phone, Twitter } from "lucide-react";
+import { Facebook, Instagram, Mail, MapPin, Phone, Twitter } from "lucide-react";
 
 const quickLinks = [
   { label: "Home", href: "/" },

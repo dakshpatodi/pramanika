@@ -34,13 +34,6 @@ class DuplicatePhoneError(DomainError):
 
 
 class InvalidCredentialsError(DomainError):
-    """Raised for BOTH "no such email" and "wrong password".
-
-    Deliberately the same exception, message, and status for both cases -
-    see Milestone 4 notes: if the two cases differed, the login endpoint
-    could be used to check which emails are registered (user enumeration).
-    """
-
     http_status = 401
 
     def __init__(self):
@@ -48,11 +41,6 @@ class InvalidCredentialsError(DomainError):
 
 
 class AccountInactiveError(DomainError):
-    """The credentials were correct, but the account has been deactivated
-    (`is_active=False`). Distinct from InvalidCredentialsError on purpose:
-    this is not a secret worth hiding - a deactivated user knows they have
-    an account, so a specific message here isn't an enumeration risk."""
-
     http_status = 403
 
     def __init__(self):
@@ -60,13 +48,6 @@ class AccountInactiveError(DomainError):
 
 
 class InvalidRefreshTokenError(DomainError):
-    """Covers every way a refresh token can fail: malformed, wrong `type`
-    claim, expired, already revoked (used once already, or logged out),
-    or pointing at a user that no longer exists / is inactive. Collapsed
-    into one message for the same reason InvalidCredentialsError is
-    collapsed - the client doesn't need to know which specific case hit,
-    it just needs to log the user out and prompt a fresh login."""
-
     http_status = 401
 
     def __init__(self):
@@ -75,12 +56,14 @@ class InvalidRefreshTokenError(DomainError):
 
 class ProductNotFoundError(DomainError):
     http_status = 404
+
     def __init__(self, identifier: str):
         super().__init__(f"Product '{identifier}' was not found.")
 
 
 class CategoryNotFoundError(DomainError):
     http_status = 404
+
     def __init__(self, slug: str):
         super().__init__(f"Category '{slug}' was not found.")
 
@@ -128,7 +111,6 @@ class InvalidCouponError(DomainError):
 
     def __init__(self, message: str = "Invalid coupon code."):
         super().__init__(message)
-
 
 
 # --- Phase 6: Checkout and orders ------------------------------------
@@ -193,3 +175,106 @@ class OrderNotCancellableError(DomainError):
 
     def __init__(self, status: str):
         super().__init__(f"An order that is {status} can no longer be cancelled.")
+
+
+class PaymentsNotConfiguredError(DomainError):
+    """Razorpay credentials are missing on the server. The message is
+    deliberately generic - it must not tell a customer (or an attacker)
+    which setting is absent; the details go to the server log."""
+
+    http_status = 503
+
+    def __init__(self):
+        super().__init__("Online payments are not available right now. Please try again later.")
+
+# --- Phase 7: payments -----------------------------------------------
+
+class OrderNotPayableError(DomainError):
+    """The order cannot be paid for right now (cancelled, expired, stock no
+    longer held, nothing to pay...). The message says why in customer words."""
+
+    http_status = 409
+
+    def __init__(self, message: str = "This order can no longer be paid."):
+        super().__init__(message)
+
+
+class OrderAlreadyPaidError(DomainError):
+    http_status = 409
+
+    def __init__(self):
+        super().__init__("This order has already been paid.")
+
+
+class PaymentGatewayError(DomainError):
+    """Razorpay could not be reached or refused the request. 502 = "the
+    server we depend on failed", and the message is deliberately generic -
+    the real reason (which never contains a secret) goes to the server log."""
+
+    http_status = 502
+
+    def __init__(self):
+        super().__init__("We could not start the payment. Nothing was charged. Please try again in a moment.")
+
+class PaymentVerificationError(DomainError):
+    """The payment could not be verified: bad signature, a Razorpay order that
+    is not this order's, or Razorpay does not confirm the payment. One generic
+    message for every cause, so the endpoint cannot be used to probe which
+    check failed."""
+
+    http_status = 400
+
+    def __init__(self):
+        super().__init__("We could not verify this payment.")
+
+
+class PaymentVerificationUnavailableError(DomainError):
+    """Razorpay could not be asked right now. Unlike PaymentGatewayError this
+    is about a payment that MAY have been made, so it must not say nothing was
+    charged."""
+
+    http_status = 502
+
+    def __init__(self):
+        super().__init__(
+            "We couldn't confirm your payment right now. If money left your account, "
+            "please don't pay again - check your order in a minute."
+        )
+
+
+class LatePaymentError(DomainError):
+    """The money arrived after the order had been cancelled or expired (or the
+    order was already paid by another payment). It is recorded and flagged for
+    a refund; the order is NOT revived."""
+
+    http_status = 409
+
+    def __init__(self):
+        super().__init__(
+            "Your payment was received after this order had been closed, so the order was not placed. "
+            "The amount will be refunded to you."
+        )
+
+class WebhookSignatureError(DomainError):
+    """A webhook whose signature does not match (400). Razorpay never sees why."""
+
+    http_status = 400
+
+    def __init__(self):
+        super().__init__("Invalid webhook signature.")
+
+
+class WebhookPayloadError(DomainError):
+    """A correctly signed webhook whose body cannot be read (400)."""
+
+    http_status = 400
+
+    def __init__(self, message: str = "Invalid webhook payload."):
+        super().__init__(message)
+
+
+class WebhookTooLargeError(DomainError):
+    http_status = 413
+
+    def __init__(self):
+        super().__init__("Webhook payload is too large.")

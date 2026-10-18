@@ -12,5 +12,10 @@ export function getApiErrorMessage(error: unknown, fallback = "Something went wr
   if (axios.isAxiosError<ApiResponse<unknown>>(error)) {
     return error.response?.data?.message ?? fallback;
   }
+  // Not an HTTP error: a plain Error (e.g. thrown by a service layer) carries a
+  // message somebody wrote on purpose, so show it instead of the generic text.
+  if (error instanceof Error && error.message.trim()) {
+    return error.message;
+  }
   return fallback;
 }

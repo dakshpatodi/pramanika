@@ -42,3 +42,24 @@ def to_money(value: Number) -> Decimal:
 def money_to_float(value: Number) -> float:
     """For the JSON boundary only - call this on an already-rounded amount."""
     return float(to_money(value))
+
+def to_paise(value: Number) -> int:
+    """Rupees -> paise, exactly (Razorpay wants the smallest currency unit
+    as an integer: Rs 406.21 -> 40621).
+
+    Done in Decimal and REFUSES anything that is not a positive amount with
+    at most two decimal places, instead of rounding it: silently charging
+    a customer 1 paisa more or less than the order total would be a bug
+    worth failing loudly for. Float noise (0.1 + 0.2) is caught the same
+    way - `to_decimal` goes through `str()`, so it arrives as
+    0.30000000000000004 and is refused rather than quietly rounded.
+    """
+    amount = to_decimal(value)
+    if not amount.is_finite():
+        raise ValueError("amount must be a finite number")
+    if amount <= 0:
+        raise ValueError("amount must be greater than zero")
+    paise = amount * 100
+    if paise != paise.to_integral_value():
+        raise ValueError("amount must have at most two decimal places")
+    return int(paise)

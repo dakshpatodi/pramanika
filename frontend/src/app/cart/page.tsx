@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { AlertTriangle } from "lucide-react";
+import Link from "next/link";
 
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { CartList } from "@/components/cart/CartList";
@@ -9,19 +9,11 @@ import { CartSkeleton } from "@/components/cart/CartSkeleton";
 import { CartSummary } from "@/components/cart/CartSummary";
 import { CouponInput } from "@/components/cart/CouponInput";
 import { EmptyCart } from "@/components/cart/EmptyCart";
+import { Banner } from "@/components/ui/banner";
 import { Button } from "@/components/ui/button";
 import { useCart } from "@/context/CartContext";
 import { getApiErrorMessage } from "@/lib/errors";
 import type { CartItem } from "@/types/cart";
-
-function Banner({ children }: { children: React.ReactNode }) {
-  return (
-    <div role="alert" className="flex items-start gap-3 rounded-xl bg-accent-light px-4 py-3 text-sm text-foreground">
-      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-accent-dark" aria-hidden="true" />
-      <div className="flex-1">{children}</div>
-    </div>
-  );
-}
 
 function CartContent() {
   const { cart, isLoading, isMutating, loadError, refreshCart, updateItem, removeItem, clearCart, applyCoupon, removeCoupon } =
@@ -89,7 +81,20 @@ function CartContent() {
             onClear={handleClear}
           />
           <div className="lg:sticky lg:top-24">
-            <CartSummary cart={cart}>
+            <CartSummary
+              cart={cart}
+              action={
+                cart.has_issues ? (
+                  <Button variant="primary" size="lg" disabled className="w-full">
+                    Fix items to continue
+                  </Button>
+                ) : (
+                  <Button variant="primary" size="lg" asChild className="w-full">
+                    <Link href="/checkout">Proceed to checkout</Link>
+                  </Button>
+                )
+              }
+            >
               <CouponInput coupon={cart.coupon} disabled={isMutating} onApply={applyCoupon} onRemove={removeCoupon} />
             </CartSummary>
           </div>

@@ -34,8 +34,10 @@ from app.core.exceptions import OrderNotCancellableError, OrderNotFoundError
 from app.core.money import money_to_float
 from app.models import Order, OrderPaymentStatus, OrderStatus
 from app.repositories.order_repository import OrderRepository
+from app.repositories.payment_repository import PaymentRepository
 from app.schemas.order import (
     OrderItemResponse,
+    OrderPaymentInfo,
     OrderListResponse,
     OrderResponse,
     OrderShippingAddressResponse,
@@ -45,6 +47,8 @@ from app.schemas.order import (
 from app.schemas.product import PaginationMeta
 from app.services.coupon_usage import CouponUsageService
 from app.services.order_rules import can_cancel
+from app.services.payment_rules import payment_block
+from app.services.payment_state import REASON_ORDER_CANCELLED, close_open_payments
 from app.services.reservation_service import ReservationService
 
 SUMMARY_ITEM_NAMES = 3
@@ -54,7 +58,15 @@ def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def to_order_response(order: Order) -> OrderResponse:
+def _payment_info(order: Order) -> OrderPaymentInfo:
+    attempts = sorted(order.payments, key=lambda p: (p.created_at is None, p.created_at))
+    return OrderPaymentInfo(
+        last_attempt=attempts[-1].status.value if attempts else None,
+        refund_pending=any(p.refund_required for p in attempts),
+    )
+
+
+def to_order_response(order: Order, *, now: Optional[datetime] = None) -> OrderResponse:
     items = [
         OrderItemResponse(
             id=item.id,
@@ -73,6 +85,10 @@ def to_order_response(order: Order) -> OrderResponse:
         status=order.status,
         payment_status=order.payment_status,
         can_cancel=can_cancel(order.status, order.payment_status),
+        can_pay=payment_block(order, now or _utcnow()) is None,
+        expires_at=order.expires_at,
+        cancellation_reason=order.cancellation_reason,
+        payment=_payment_info(order),
         coupon_code=order.coupon_code,
         items=items,
         item_count=sum(i.quantity for i in items),
@@ -100,14 +116,18 @@ def to_order_response(order: Order) -> OrderResponse:
     )
 
 
-def _to_summary(order: Order) -> OrderSummaryResponse:
+def _to_summary(order: Order, now: datetime) -> OrderSummaryResponse:
     return OrderSummaryResponse(
         id=order.id,
         order_number=order.order_number,
         status=order.status,
         payment_status=order.payment_status,
+        can_pay=payment_block(order, now) is None,
+        expires_at=order.expires_at,
+        cancellation_reason=order.cancellation_reason,
         total=money_to_float(order.total_amount),
         item_count=sum(i.quantity for i in order.items),
+        line_count=len(order.items),
         item_names=[i.product_name_snapshot for i in order.items][:SUMMARY_ITEM_NAMES],
         created_at=order.created_at,
     )
@@ -119,6 +139,7 @@ class OrderService:
         self.orders = OrderRepository(db)
         self.reservations = ReservationService(db)
         self.coupon_usage = CouponUsageService(db)
+        self.payments = PaymentRepository(db)
         self.clock = clock or _utcnow
 
     # --- reads --------------------------------------------------------------
@@ -127,7 +148,7 @@ class OrderService:
         orders, total = self.orders.list_for_user(user_id, page=page, page_size=page_size)
         total_pages = (total + page_size - 1) // page_size if total > 0 else 0
         return OrderListResponse(
-            orders=[_to_summary(o) for o in orders],
+            orders=[_to_summary(o, self.clock()) for o in orders],
             pagination=PaginationMeta(
                 total=total,
                 page=page,
@@ -143,7 +164,7 @@ class OrderService:
         order = self.orders.get_for_user(order_id, user_id)
         if order is None:
             raise OrderNotFoundError()
-        return to_order_response(order)
+        return to_order_response(order, now=self.clock())
 
     # --- cancel -------------------------------------------------------------
 
@@ -167,6 +188,9 @@ class OrderService:
 
                 if self.orders.cancel_pending(order.id, self.clock()):
                     # We won the gate: only we restore the coupon and release stock.
+                    # (Phase 7: and close any payment attempt still open on the order,
+                    # so a stale Razorpay order cannot be paid as if the order lived.)
+                    close_open_payments(self.payments, order.id, reason=REASON_ORDER_CANCELLED)
                     if order.coupon_id is not None:
                         self.coupon_usage.restore(order.coupon_id)
                     self.reservations.release_items(order)

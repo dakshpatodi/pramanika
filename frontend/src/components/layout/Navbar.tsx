@@ -74,6 +74,9 @@ export function Navbar() {
                   {user.first_name}
                 </Link>
               </Button>
+              <Button variant="ghost" size="md" asChild>
+                <Link href="/orders">Orders</Link>
+              </Button>
               <Button variant="outline" size="icon" aria-label="Log out" onClick={() => logout()}>
                 <LogOut className="h-4 w-4" />
               </Button>
@@ -102,7 +105,7 @@ export function Navbar() {
       <div
         className={cn(
           "overflow-hidden border-t border-border/80 bg-background transition-[max-height] duration-300 lg:hidden",
-          isMenuOpen ? "max-h-96" : "max-h-0 border-t-0"
+          isMenuOpen ? "max-h-[28rem]" : "max-h-0 border-t-0"
         )}
       >
         <nav className="container flex flex-col gap-1 py-3">
@@ -123,6 +126,11 @@ export function Navbar() {
                 <Link href="/profile" className="flex items-center justify-center gap-2">
                   <UserIcon className="h-4 w-4" />
                   {user.first_name}
+                </Link>
+              </Button>
+              <Button variant="outline" size="md" className="w-full" asChild onClick={() => setIsMenuOpen(false)}>
+                <Link href="/orders" className="flex items-center justify-center gap-2">
+                  Orders
                 </Link>
               </Button>
               <Button

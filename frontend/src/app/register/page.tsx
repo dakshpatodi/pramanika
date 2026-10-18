@@ -50,7 +50,14 @@ export default function RegisterPage() {
       // accept_terms is a frontend-only field - the backend's
       // UserCreate schema deliberately has no such field (see
       // Milestone 3 notes), so it's stripped before the request is sent.
-      const { accept_terms: _acceptTerms, ...payload } = values;
+      const payload = {
+        first_name: values.first_name,
+        last_name: values.last_name,
+        email: values.email,
+        phone_number: values.phone_number,
+        password: values.password,
+        confirm_password: values.confirm_password,
+      };
       await registerUser(payload);
       setRegistered(true);
       setTimeout(() => router.push("/login"), 2500);

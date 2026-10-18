@@ -38,10 +38,13 @@ from app.models import (
     DiscountType,
     Inventory,
     Order,
+    OrderCancellationReason,
     OrderInventoryState,
     OrderItem,
     OrderPaymentStatus,
     OrderStatus,
+    Payment,
+    PaymentTransactionStatus,
     Product,
     User,
 )
@@ -193,6 +196,8 @@ class PostgresTestCase(unittest.TestCase):
         payment_status: OrderPaymentStatus = OrderPaymentStatus.PENDING,
         coupon: Optional[Coupon] = None,
         reserve_stock: bool = True,
+        cancellation_reason: Optional[OrderCancellationReason] = None,
+        expires_at: Optional[datetime] = None,
     ) -> Order:
         """An order as checkout would leave it. With `reserve_stock` the
         inventory rows are bumped too, so the books balance."""
@@ -208,6 +213,10 @@ class PostgresTestCase(unittest.TestCase):
             inventory_state=inventory_state,
             coupon_id=coupon.id if coupon else None,
             coupon_code=coupon.code if coupon else None,
+            # A cancelled order always has a reason (CHECK in the database).
+            cancellation_reason=cancellation_reason
+            or (OrderCancellationReason.CUSTOMER if status == OrderStatus.CANCELLED else None),
+            expires_at=expires_at,
         )
         for product, quantity in lines:
             order.items.append(
@@ -227,6 +236,26 @@ class PostgresTestCase(unittest.TestCase):
         self.db.add(order)
         self.db.commit()
         return order
+
+    def make_payment(self, order: Order, **overrides) -> Payment:
+        """A Razorpay payment row for `order` (INITIATED unless overridden)."""
+        status = overrides.pop("status", PaymentTransactionStatus.INITIATED)
+        values = dict(
+            order_id=order.id,
+            payment_gateway="razorpay",
+            gateway_order_id=f"order_T{_unique()}",
+            amount=order.total_amount,
+            currency="INR",
+            status=status,
+        )
+        if status in (PaymentTransactionStatus.CAPTURED, PaymentTransactionStatus.REFUNDED):
+            values.setdefault("gateway_payment_id", f"pay_T{_unique()}")
+            values.setdefault("paid_at", datetime.now(timezone.utc))
+        values.update(overrides)
+        payment = Payment(**values)
+        self.db.add(payment)
+        self.db.commit()
+        return payment
 
     # --- readers (always fresh) ---
 

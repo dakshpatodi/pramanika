@@ -36,7 +36,7 @@ import re
 import uuid
 from contextlib import contextmanager
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Callable, Iterator, Optional
 
@@ -108,6 +108,7 @@ class CheckoutService:
         *,
         config: Optional[PricingConfig] = None,
         clock: Optional[Callable[[], datetime]] = None,
+        payment_window: Optional[timedelta] = None,
     ):
         self.db = db
         self.carts = CartRepository(db)
@@ -119,6 +120,8 @@ class CheckoutService:
         self.coupon_usage = CouponUsageService(db)
         self.config = config or PricingConfig.from_settings(settings)
         self.clock = clock or _utcnow
+        # How long the order may stay unpaid before it expires (Phase 7).
+        self.payment_window = payment_window or timedelta(minutes=settings.ORDER_PAYMENT_WINDOW_MINUTES)
 
     # ------------------------------------------------------------------
 
@@ -260,6 +263,7 @@ class CheckoutService:
                 coupon_code=coupon.code if coupon is not None else None,
                 idempotency_key=idempotency_key,
                 request_fingerprint=fingerprint,
+                expires_at=now + self.payment_window,
             )
             for item, product, unit_price in priced:
                 order.items.append(

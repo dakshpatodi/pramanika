@@ -7,7 +7,7 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING, List, Optional
 
-from sqlalchemy import CheckConstraint, DateTime, Enum, ForeignKey, Index, Integer, Numeric, Sequence, String, func
+from sqlalchemy import CheckConstraint, DateTime, Enum, ForeignKey, Index, Integer, Numeric, Sequence, String, func, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -72,6 +72,15 @@ class OrderInventoryState(str, enum.Enum):
     CONSUMED = "consumed"
 
 
+class OrderCancellationReason(str, enum.Enum):
+    """Why an order is CANCELLED (Phase 7). An order that expired because
+    it was not paid in time is a cancelled order with reason EXPIRED - the
+    UI says "Expired", the status enum stays as it was."""
+
+    CUSTOMER = "customer"
+    EXPIRED = "expired"
+
+
 # Human-facing order numbers (PRM-2026-000123) come from this sequence.
 # A sequence rather than MAX(order_number)+1 so two simultaneous checkouts
 # can never be handed the same number. Gaps (from rolled-back checkouts)
@@ -130,7 +139,7 @@ class Order(Base):
     delivery_charge: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False, default=0, server_default="0")
     total_amount: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
 
-        # --- Phase 6: pricing snapshot --------------------------------------
+    # --- Phase 6: pricing snapshot --------------------------------------
     taxable_amount: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False, default=0, server_default="0")
     """Subtotal minus the coupon discount - the amount GST was charged on."""
 
@@ -161,7 +170,7 @@ class Order(Base):
         ),
         nullable=False,
         default=OrderPaymentStatus.PENDING,
-                server_default=OrderPaymentStatus.PENDING.value,
+        server_default=OrderPaymentStatus.PENDING.value,
     )
 
     # --- Phase 6: reservation + idempotency -----------------------------
@@ -190,6 +199,23 @@ class Order(Base):
 
     cancelled_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
+    # --- Phase 7: payment window ----------------------------------------
+    expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    """When an unpaid order gives its reserved stock back (checkout sets it
+    to creation time + ORDER_PAYMENT_WINDOW_MINUTES). NULL = never expires
+    (orders from before Phase 7 that were not backfilled)."""
+
+    cancellation_reason: Mapped[Optional[OrderCancellationReason]] = mapped_column(
+        Enum(
+            OrderCancellationReason,
+            name="order_cancellation_reason",
+            native_enum=True,
+            values_callable=lambda e: [m.value for m in e],
+        ),
+        nullable=True,
+    )
+    """Set exactly when status is CANCELLED (enforced by a CHECK)."""
+
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
@@ -205,8 +231,17 @@ class Order(Base):
 
     __table_args__ = (
         CheckConstraint("subtotal >= 0", name="ck_orders_subtotal_non_negative"),
-                CheckConstraint("total_amount >= 0", name="ck_orders_total_amount_non_negative"),
+        CheckConstraint("total_amount >= 0", name="ck_orders_total_amount_non_negative"),
         CheckConstraint("taxable_amount >= 0", name="ck_orders_taxable_amount_non_negative"),
+        CheckConstraint(
+            "(status = 'cancelled') = (cancellation_reason IS NOT NULL)",
+            name="ck_orders_cancellation_reason_matches_status",
+        ),
+        Index(
+            "ix_orders_open_expires_at",
+            "expires_at",
+            postgresql_where=text("status = 'pending' AND payment_status = 'pending' AND inventory_state = 'reserved'"),
+        ),
         Index(
             "uq_orders_user_id_idempotency_key",
             "user_id",

@@ -18,6 +18,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api import orders
 from app.api import addresses
+from app.api import payments
 from app.api.auth import router as auth_router
 from app.api.categories import router as categories_router
 from app.api.products import router as products_router
@@ -26,11 +27,13 @@ from app.api.cart import router as cart_router
 from app.core.config import settings
 from app.core.exceptions import DomainError
 from app.core.rate_limit import limiter
+from app.jobs.expiry_worker import expiry_lifespan
 
 app = FastAPI(
     title=settings.APP_NAME,
     description="E-commerce API for Healthy Harvest - cereals, ready mixes, and healthy foods.",
     version="0.1.0",
+    lifespan=expiry_lifespan,
 )
 # Registers the shared limiter (app/core/rate_limit.py) on app.state so
 # slowapi's internals can find it via `request.app.state.limiter` - this
@@ -54,6 +57,7 @@ app.include_router(products_router)
 app.include_router(cart_router)
 app.include_router(addresses.router)
 app.include_router(orders.router)
+app.include_router(payments.router)
 
 # --- Exception handlers -----------------------------------------------
 # These four handlers are what make EVERY response - regardless of where
