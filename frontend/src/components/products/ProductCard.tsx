@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { AlertTriangle, XCircle } from "lucide-react";
 
+import { WishlistButton } from "@/components/wishlist/WishlistButton";
 import { getCategoryIcon } from "@/lib/category-icons";
 import { formatPrice } from "@/lib/utils";
 import type { ProductListItem } from "@/types/product";
@@ -15,55 +16,63 @@ interface ProductCardProps {
  * powers the homepage's fake data and stays untouched). See Phase 4
  * design decision #6.
  *
- * The whole card is the "CTA to view product" (a Link wrapping
- * everything) rather than a separate button inside it - a nested
- * interactive element would be worse UX and is redundant when the
- * entire card already navigates on click.
+ * The card is the "CTA to view product": a Link wraps the image and the
+ * details. The wishlist heart is a SIBLING of that Link, not inside it - an
+ * interactive element nested in a link is invalid HTML and would navigate
+ * on every heart click.
  */
 export function ProductCard({ product }: ProductCardProps) {
   const Icon = getCategoryIcon(product.category.slug);
 
   return (
-    <Link
-      href={`/shop/${product.slug}`}
-      className="group flex flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-card transition-all duration-300 hover:-translate-y-1 hover:shadow-lift"
-    >
-      <div className="relative flex aspect-square items-center justify-center bg-primary-light">
-        {product.compare_at_price ? (
-          <span className="absolute left-3 top-3 rounded-full bg-accent px-2.5 py-1 text-xs font-semibold text-accent-foreground">
-            Sale
-          </span>
-        ) : null}
-        {!product.in_stock ? (
-          <span className="absolute right-3 top-3 flex items-center gap-1 rounded-full bg-foreground/80 px-2.5 py-1 text-xs font-semibold text-background">
-            <XCircle className="h-3 w-3" /> Out of stock
-          </span>
-        ) : product.low_stock ? (
-          <span className="absolute right-3 top-3 flex items-center gap-1 rounded-full bg-secondary px-2.5 py-1 text-xs font-semibold text-secondary-foreground">
-            <AlertTriangle className="h-3 w-3" /> Low stock
-          </span>
-        ) : null}
-        <Icon
-          className="h-16 w-16 text-primary transition-transform duration-300 group-hover:scale-110"
-          strokeWidth={1.5}
-        />
-      </div>
-
-      <div className="flex flex-1 flex-col gap-2 p-4">
-        <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          {product.category.name}
-        </span>
-        <h3 className="font-display text-base font-semibold text-foreground">{product.name}</h3>
-
-        <div className="mt-auto flex items-baseline gap-2 pt-2">
-          <span className="font-display text-lg font-semibold text-foreground">{formatPrice(product.price)}</span>
+    <div className="group relative flex flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-card transition-all duration-300 hover:-translate-y-1 hover:shadow-lift">
+      <Link
+        href={`/shop/${product.slug}`}
+        className="flex flex-1 flex-col focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
+      >
+        <div className="relative flex aspect-square items-center justify-center bg-primary-light">
           {product.compare_at_price ? (
-            <span className="text-sm text-muted-foreground line-through">
-              {formatPrice(product.compare_at_price)}
+            <span className="absolute left-3 top-3 rounded-full bg-accent px-2.5 py-1 text-xs font-semibold text-accent-foreground">
+              Sale
             </span>
           ) : null}
+          {!product.in_stock ? (
+            <span className="absolute right-3 top-3 flex items-center gap-1 rounded-full bg-foreground/80 px-2.5 py-1 text-xs font-semibold text-background">
+              <XCircle className="h-3 w-3" /> Out of stock
+            </span>
+          ) : product.low_stock ? (
+            <span className="absolute right-3 top-3 flex items-center gap-1 rounded-full bg-secondary px-2.5 py-1 text-xs font-semibold text-secondary-foreground">
+              <AlertTriangle className="h-3 w-3" /> Low stock
+            </span>
+          ) : null}
+          <Icon
+            className="h-16 w-16 text-primary transition-transform duration-300 group-hover:scale-110"
+            strokeWidth={1.5}
+          />
         </div>
-      </div>
-    </Link>
+
+        <div className="flex flex-1 flex-col gap-2 p-4">
+          <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            {product.category.name}
+          </span>
+          <h3 className="font-display text-base font-semibold text-foreground">{product.name}</h3>
+
+          <div className="mt-auto flex flex-wrap items-baseline gap-x-2 pr-10 pt-2">
+            <span className="font-display text-lg font-semibold text-foreground">{formatPrice(product.price)}</span>
+            {product.compare_at_price ? (
+              <span className="text-sm text-muted-foreground line-through">
+                {formatPrice(product.compare_at_price)}
+              </span>
+            ) : null}
+          </div>
+        </div>
+      </Link>
+      <WishlistButton
+        productId={product.id}
+        productName={product.name}
+        redirectTo={`/shop/${product.slug}`}
+        className="absolute bottom-3 right-3 z-10"
+      />
+    </div>
   );
 }

@@ -19,6 +19,8 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from app.api import orders
 from app.api import addresses
 from app.api import payments
+from app.api import wishlist
+from app.api import invoices
 from app.api.auth import router as auth_router
 from app.api.categories import router as categories_router
 from app.api.products import router as products_router
@@ -58,6 +60,8 @@ app.include_router(cart_router)
 app.include_router(addresses.router)
 app.include_router(orders.router)
 app.include_router(payments.router)
+app.include_router(wishlist.router)
+app.include_router(invoices.router)
 
 # --- Exception handlers -----------------------------------------------
 # These four handlers are what make EVERY response - regardless of where

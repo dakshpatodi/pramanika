@@ -11,7 +11,7 @@ import {
   type AddressField,
 } from "@/lib/address-validation";
 import { getApiErrorMessage } from "@/lib/errors";
-import type { AddressInput } from "@/types/address";
+import type { Address, AddressInput } from "@/types/address";
 
 interface AddressFormProps {
   /** Saves the address. Should REJECT on failure - the message is shown in the form. */
@@ -20,6 +20,14 @@ interface AddressFormProps {
   onCancel?: () => void;
   /** Offer "make this my default" (hidden for the very first address - it is always the default). */
   offerDefault: boolean;
+  /** Edit mode: start from this saved address instead of an empty form. */
+  initial?: Address;
+  /** Button text; "Save address" by default. */
+  submitLabel?: string;
+  /** Accessible name of the form; "Add a delivery address" by default. */
+  ariaLabel?: string;
+  /** Put the cursor in the first field when the form appears. */
+  autoFocus?: boolean;
 }
 
 const EMPTY = {
@@ -42,9 +50,29 @@ const FIELDS: { name: AddressField; label: string; autoComplete: string; inputMo
   { name: "postal_code", label: "PIN code", autoComplete: "postal-code", inputMode: "numeric", required: true },
 ];
 
-/** Inline "add a delivery address" form (India only for now). */
-export function AddressForm({ onSubmit, onCancel, offerDefault }: AddressFormProps) {
-  const [values, setValues] = useState(EMPTY);
+/** Inline address form - add a new one, or edit a saved one with `initial` (India only for now). */
+export function AddressForm({
+  onSubmit,
+  onCancel,
+  offerDefault,
+  initial,
+  submitLabel = "Save address",
+  ariaLabel = "Add a delivery address",
+  autoFocus = false,
+}: AddressFormProps) {
+  const [values, setValues] = useState(() =>
+    initial
+      ? {
+          full_name: initial.full_name,
+          phone_number: initial.phone_number,
+          address_line_1: initial.address_line_1,
+          address_line_2: initial.address_line_2 ?? "",
+          city: initial.city,
+          state: initial.state,
+          postal_code: initial.postal_code,
+        }
+      : EMPTY
+  );
   const [isDefault, setIsDefault] = useState(false);
   const [errors, setErrors] = useState<AddressErrors>({});
   const [serverError, setServerError] = useState<string | null>(null);
@@ -70,9 +98,9 @@ export function AddressForm({ onSubmit, onCancel, offerDefault }: AddressFormPro
   };
 
   return (
-    <form onSubmit={handleSubmit} noValidate aria-label="Add a delivery address" className="flex flex-col gap-4">
+    <form onSubmit={handleSubmit} noValidate aria-label={ariaLabel} className="flex flex-col gap-4">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        {FIELDS.map((field) => {
+        {FIELDS.map((field, index) => {
           const id = `address-${field.name}`;
           const error = errors[field.name];
           return (
@@ -90,6 +118,7 @@ export function AddressForm({ onSubmit, onCancel, offerDefault }: AddressFormPro
                 invalid={Boolean(error)}
                 aria-describedby={error ? `${id}-error` : undefined}
                 disabled={isSaving}
+                autoFocus={autoFocus && index === 0}
                 onChange={(e) => setValues((v) => ({ ...v, [field.name]: e.target.value }))}
               />
               {error ? (
@@ -123,7 +152,7 @@ export function AddressForm({ onSubmit, onCancel, offerDefault }: AddressFormPro
 
       <div className="flex flex-wrap gap-3">
         <Button type="submit" variant="primary" disabled={isSaving}>
-          {isSaving ? "Saving..." : "Save address"}
+          {isSaving ? "Saving..." : submitLabel}
         </Button>
         {onCancel ? (
           <Button type="button" variant="ghost" disabled={isSaving} onClick={onCancel}>

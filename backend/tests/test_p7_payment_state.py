@@ -212,7 +212,7 @@ class SingleWriterHygieneTests(unittest.TestCase):
         for path in app_dir.rglob("*.py"):
             if path.name in ("payment_state.py",):
                 continue
-            for number, line in enumerate(path.read_text().splitlines(), 1):
+            for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
                 if pattern.search(line) and not line.lstrip().startswith("#"):
                     offenders.append(f"{path.relative_to(app_dir)}:{number}: {line.strip()}")
         self.assertEqual(offenders, [])

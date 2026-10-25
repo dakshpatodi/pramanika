@@ -28,7 +28,7 @@ Phase 7 — Razorpay Integration
 Status: COMPLETE (verified in Razorpay TEST MODE on 2026-10-15; see "Phase 7 verification")
 
 Phase 8 — User Dashboard
-Status: PLANNED (not started)
+Status: IMPLEMENTED, PENDING VERIFICATION on the developer's machine (six of the seven features are built and passed in an independent sandbox; notifications are not built; see "Phase 8 verification". Notifications are deliberately deferred.) Do not start Phase 9 until this is verified and closed.
 
 Phase 9 — Admin Dashboard
 Status: PLANNED
@@ -55,6 +55,7 @@ Backend:
 - SQLAlchemy
 - Alembic
 - httpx (the only package Phase 7 added; used to call the Razorpay REST API)
+- fpdf2 (the only package Phase 8 added; builds invoice PDFs; needs Python 3.10 or newer)
 
 Database:
 - PostgreSQL
@@ -457,7 +458,7 @@ Phase 6 order endpoints are extended, not replaced: order responses gain `can_pa
 - If money is captured at Razorpay but booking it fails (for example inventory books out of balance), the transaction rolls back and a CRITICAL log line "CAPTURED MONEY NOT RECORDED" names the order and payment. Any future stock editing (Phase 8+) must refuse to set quantity below reserved_quantity.
 - `payment_webhook_events` has no purge (identifiers only). Add a periodic cleanup (for example rows older than 90 days) when volume warrants.
 - A failed first attempt lets the customer open a second Razorpay order while the first popup may still be open. If both are paid, the second is flagged `refund_required` and is never double-credited.
-- Not implemented (outside Phase 7): refund API, payment emails/notifications, per-user coupon limits, shipping/fulfilment after confirmation, address edit/delete. Those belong to later phases.
+- Not implemented (outside Phase 7): refund API, payment emails/notifications, per-user coupon limits, shipping/fulfilment after confirmation, address edit/delete. Those belong to later phases. (Address edit/delete were done in Phase 8; the rest are still open.)
 - Older Phase 6 behaviour unchanged: per-user coupon limits are still not implemented; GST is still a flat 5%.
 
 ### Phase 7 verification
@@ -498,6 +499,126 @@ NOT exercised (be honest about these):
 - Phase 8 (User Dashboard) must not weaken any rule above. Any admin or dashboard stock editing must refuse quantity < reserved_quantity.
 - Phase 9 (Admin Dashboard) is the natural home for a refund workflow (list `refund_required` payments, call the refund API, move captured → refunded) and for shipping/fulfilment states.
 - Going live is a separate, deliberate step: live keys, `APP_ENV=production`, a real public webhook URL, a long random webhook secret, rate limiting, and an end-to-end test with the live dashboard in a controlled way.
+
+## Phase 8 — User Dashboard
+
+Status: implemented; pending verification on the developer's machine (see "Phase 8 verification" below).
+
+Delivered as seven milestones (M1–M7). Phase 8 added **no database migration** (Alembic head is still `e4a91c7b3d26`), changed **no** payment, stock, coupon or pricing behaviour, and added **one** package (`fpdf2`).
+
+### What exists, by feature
+
+| Feature | Backend | Frontend |
+|---|---|---|
+| A. Profile | `PATCH /api/users/me` | `/profile` (inside the account frame) with an edit form |
+| B. Order history | Phase 6/7 `GET /api/orders` (reused) | `/orders` inside the account frame |
+| C. Order detail + payment status | Phase 6/7 `GET /api/orders/{id}` and the payment endpoints (reused) | `/orders/[id]` inside the account frame; a paid order also offers Download invoice |
+| D. Wishlist | `GET /api/wishlist`, `GET /api/wishlist/product-ids`, `POST /api/wishlist/items`, `DELETE /api/wishlist/items/{product_id}` | hearts on product cards and the product page; `/dashboard/wishlist` |
+| E. Saved addresses | `PATCH /api/addresses/{id}`, `POST /api/addresses/{id}/default`, `DELETE /api/addresses/{id}` (list and add are Phase 6) | `/dashboard/addresses` |
+| F. Invoices | `GET /api/invoices`, `GET /api/invoices/{order_id}` (PDF) | `/dashboard/invoices`; button on a paid order's page |
+| G. Notifications | **not built (deferred by decision)** | **not built** |
+
+Also new: the account frame (`DashboardShell`) with the menu Overview, Profile, Orders, Wishlist, Saved addresses, Invoices, and the `/dashboard` overview (counts and recent orders). The navbar's name button now goes to `/dashboard`.
+
+### Backend
+
+All Phase 8 routes depend on `get_current_active_user`; **no route accepts a user id** — the owner is always the user in the token. Layering as before: router → service → repository, services own commit/rollback, `DomainError` carries the HTTP status, responses use `APIResponse[T]`. Lists are paginated (`page_size` max 50). No new tables: the Phase 3 `wishlists` / `wishlist_items` and `addresses` tables are used as they are.
+
+Profile (`PATCH /api/users/me`, `UserService`):
+- Only `first_name`, `last_name`, `phone` can change; send only what changes. Any other key (`email`, `role`, `is_active`, `is_verified`, `id`, `user_id`, anything unknown) is a 422 and writes nothing. Email is read-only (it is the login identity and there is no verification flow).
+- Phone follows the registration rule; a number used by another account is a 409 (the unique constraint backs the pre-check under a race).
+
+Addresses (`AddressService`):
+- Edit refuses protected keys with 422 (`user_id`, `country`, `is_default`, `id`, unknown). `address_line_2` may be cleared (null or ""); other fields cannot be blank. Indian PIN rule `^[1-9][0-9]{5}$`.
+- One default, always: a user with addresses has exactly one default. Deleting the default promotes the newest remaining address in the same transaction. Deleting the last address is allowed; the next one added becomes the default. Set-default locks the owner.
+- Delete takes the user's cart lock first, as checkout does before reading the address, so a delete racing a checkout either loses cleanly ("address not found") or follows a saved order. Orders keep their own copy of the delivery address: editing or deleting a saved address never changes an order (a plain DELETE statement is used, so no order row is loaded or rewritten; only the optional link becomes empty).
+- Not found and "someone else's" are the same 404.
+- Limit of 20 saved addresses per user (409 after that); this is a small addition to the Phase 6 `POST /api/addresses` (`MAX_ADDRESSES_PER_USER` in `address_service.py`).
+- The Phase 6 create body ignores unknown keys instead of refusing them; the service builds the row from declared fields only (owner from the token, country fixed to India), so a `user_id` or `country` in the body has no effect. This is pinned by `tests/test_p8_security.py` as the one documented exception.
+
+Wishlist (`WishlistService`):
+- `POST /api/wishlist/items` is idempotent: 201 when added, 200 when already saved (`INSERT … ON CONFLICT DO NOTHING` under a per-user lock, so two tabs make one row and two first adds make one wishlist). `DELETE` is 200 whether or not the product was there.
+- Only active products can be added (404 otherwise, same message as the cart). A saved product that is deactivated later stays on the list flagged `is_available: false`, `in_stock: false` so it can be removed. A product deleted outright disappears (foreign key cascade). Out-of-stock products can be saved.
+- At most 100 products per wishlist (409 `WishlistFullError` for a new one after that; re-adding or removing still works).
+- Price, stock and active flag are read fresh at request time (one query per page plus one count). Exact stock numbers are never returned (`in_stock`, `low_stock` only).
+
+Invoices (`InvoiceService`, `invoice_data.py`, `invoice_pdf.py`):
+- A PDF per **paid** order, built only from the order's stored snapshot: lines, stored pricing (subtotal, discount and coupon code, taxable amount, GST rate and amount, delivery, total) and the order's own copy of the delivery address. Nothing is recalculated and nothing is read from the live product or saved address, so later changes never alter an old invoice.
+- Invoice number = the order number (the project has no separate invoice numbering; none was invented). Titled "Invoice", not "Tax Invoice". GST appears at order level exactly as stored: no CGST/SGST split, no HSN codes, no place-of-supply logic. Dates in IST (+05:30). "Paid on" is the capture time of the payment that paid the order (a late capture flagged `refund_required` is ignored), falling back to the order date.
+- No gateway ids and no mention of Razorpay on the document.
+- Errors: no or invalid token 401, deactivated account 403, malformed id 422, not your order or no such order 404 (same answer), your order but not paid 409. Download headers: `Content-Disposition: attachment`, `Cache-Control: no-store`, `X-Content-Type-Options: nosniff`. The list is paginated (`page_size` max 50).
+- Seller block prints only what is configured (see environment variables); with nothing set the header shows just "Pramanika" and no GSTIN or address.
+- Amounts print as "Rs. 1,23,456.78" (Indian digit grouping). The built-in PDF fonts have no rupee glyph and are Latin-1 only, so text outside Latin-1 (for example a Devanagari product name) prints as `?`, never as an error.
+
+### Environment variables added (all optional, blank by default; documented in `.env.example`)
+
+- `INVOICE_SELLER_NAME`, `INVOICE_SELLER_ADDRESS` (use ` | ` for a line break), `INVOICE_SELLER_GSTIN` (uppercased; the 15-character format is checked at startup, the check digit is not), `INVOICE_SELLER_EMAIL`.
+- **Fill these with real, legally correct details before giving invoices to customers.** Whether the document satisfies GST invoice rules for the business is for the owner or an accountant to decide; the app does not claim it does.
+
+### Frontend
+
+Routes: `/dashboard`, `/profile`, `/orders`, `/orders/[id]`, `/dashboard/wishlist`, `/dashboard/addresses`, `/dashboard/invoices`. Every page wraps itself in `ProtectedRoute` (a visitor is sent to `/login?redirect=…` and nothing protected is rendered); the account frame does not check the session itself.
+
+- **Account frame:** `components/dashboard/DashboardShell.tsx` (one `<h1>` unless the page draws its own; labelled "Account" menu, a sidebar on wide screens and a scrollable row on narrow ones; `aria-current` on the current page) and `dashboard-nav.ts` (the single list of menu items; add a page there only when it exists).
+- **Overview:** `useDashboardOverview` loads orders, wishlist, addresses and invoices independently, so one failing endpoint shows "Couldn't load" with Retry on its own tile and never blanks the page.
+- **Profile:** `ProfileForm` edits first name, last name and phone; email is shown but locked; only changed fields are sent; server rules are mirrored client-side and the server's message is shown when it refuses; success updates the navbar name through `AuthContext.updateUser` (which only replaces the user when the id matches the signed-in user, so a late response can never sign anyone back in).
+- **Addresses:** `useAddresses` (also used by checkout; only gained optional behaviour) exposes add, update (diff-only), make default and delete; inline delete confirmation says past orders keep their delivery details and warns when the default is being deleted; the 20-address limit is explained instead of offering a form that would be refused.
+- **Invoices:** `useInvoices`, `InvoiceDownloadButton`, `lib/download.ts`. The PDF is fetched through `apiClient` as a blob with the Authorization header (never a token in a URL) and saved as `invoice-<order number>.pdf`; a failed blob request has its JSON error body read so the server's message is shown.
+- **Wishlist:** `context/WishlistContext.tsx` holds only the saved product ids (loaded after login, discarded on logout or user change, stale responses discarded); `components/wishlist/WishlistButton.tsx` is the heart on `ProductCard` and the labelled button on the product page; `/dashboard/wishlist` loads its own pages of details (`useWishlistItems`) with Add to cart (one unit; the server decides stock) and Remove. Saves and removes are optimistic with rollback and one request per product at a time. Outside a `WishlistProvider` the heart renders nothing, so any page or test that renders `ProductCard` without the provider behaves as before. In the app the root layout provides it (`AuthProvider` › `CartProvider` › `WishlistProvider`).
+- `ProductCard` is no longer a single `Link`: its root is a `div`, the `Link` wraps the image and details, and the heart is a sibling of the Link (a button inside a link is invalid HTML and would navigate on click).
+- No second API client, no second token store, no browser storage in any Phase 8 file, no environment variable read in any Phase 8 file, no secret anywhere in browser code (the Phase 7 secret-scan test still applies and passes).
+- Product images are not shown anywhere in the shop yet (category icons are used), so the wishlist rows use an icon tile too.
+
+### Security rules for Phase 8 (must hold in later phases)
+
+- Every account route requires a valid access token and takes its owner from it; no route may accept a user id (path, query or body). `tests/test_p8_security.py` pins the exact list of account routes, that each refuses a missing or garbage token with 401, and that no route takes an owner id. **Adding an account route means updating `EXPECTED` in that test on purpose.**
+- Write bodies on Phase 8 routes refuse unknown keys (422); the one documented exception is the Phase 6 create-address body (see Backend › Addresses).
+- Invoices are built only from stored order data and are never cached (`no-store`); someone else's order and a missing order are the same 404.
+- Deleting or editing a saved address must never touch an order (orders carry their own address copy).
+- All earlier Phase 7 rules still hold (no payment secret in any response, log, frontend file or build output; amounts and success never trusted from the browser).
+- This is a code review plus automated tests, not a penetration test.
+
+### Phase 8 verification
+
+Run in an independent sandbox (a reconstruction of the project, with stand-ins for a few files that were not shared), 2026-10-25. **Not yet run on the developer's machine** — that run is what closes Phase 8.
+
+Backend (sandbox, dedicated PostgreSQL test database):
+- Full suite: 927 tests, OK, 1 skipped (761 at the close of Phase 7 + 166 in Phase 8: profile 22, addresses 42, wishlist 35, invoices 57, security 10). The skipped test checks that the real `app.main` mounts every account route; it skips only when the checkout's `app.main` cannot be imported or mounts no API routes, so it should run (and pass) on the developer's machine.
+- `alembic heads`: `e4a91c7b3d26` (single head). A fresh database upgraded cleanly to it. `alembic check`: "No new upgrade operations detected."
+- Mutation checks (deliberate bugs, each expected to make a test fail): profile and addresses 9 (8 caught; the 9th, skipping the phone pre-check, is harmless because the database constraint gives the same 409), wishlist 10 (all caught), invoices 19 (all caught; two were first missed and their tests strengthened), security 3 (a route without login, a route taking a user id, an unreviewed extra route: all caught). The wishlist tests also found and fixed one real bug before delivery (a reused session could show a product's old active flag).
+
+Frontend (sandbox, against the developer's real UI primitives, Navbar, AuthContext, ProtectedRoute, axios client, `ProductCard`, product page and layout):
+- `npx tsc --noEmit`: 0 errors.
+- Vitest: 48 files, 537 tests passed, 0 failed, 0 skipped (297 before Phase 8 in the sandbox copy + 240 in Phase 8: M4 60, M5 91, M6 89). The developer's own total will differ because the sandbox holds stand-ins; what matters is that all pass.
+- ESLint with Next's standard rules (`next/core-web-vitals` and `next/typescript`) over all 62 Phase 8 source and test files: clean. The project's own `npm run lint` configuration was not available.
+- Mutation checks: 22 (M4), 40 (M5) and 57 (M6) deliberate bugs, all caught after the weak tests they exposed were strengthened.
+- No existing Phase 5–7 test was modified or removed. Two later milestones (M5 and M6) updated assertions in two earlier *Phase 8* tests (`dashboard-shell`, `dashboard-overview`) that had asserted a menu or tile that was still to come.
+
+NOT run, and to be done by the developer:
+- `npm run build`, the project's real `npm run lint`, the full backend suite and `phase6_smoke_test.ps1` on the real machine and database, and `alembic check` against the real database.
+- Any real-browser check: hearts and layout at about 360 px, a real PDF download opened in a viewer, the expired-session path, checkout still placing an order after editing or deleting an address.
+- A paid order in Razorpay TEST MODE followed by an invoice download (the invoice depends on the stored capture time).
+
+### Known limitations and the notifications gap
+
+- **Notifications (feature G) are not implemented**, by decision. No notification table, model, endpoint or page exists, and nothing sends email, SMS, push or WebSocket messages. A customer currently learns about an order or payment change only by opening the order page.
+- **Smallest next step:** an in-app notification list with no new infrastructure: one new table (`notifications`: user id, type, title, body, link, created_at, read_at) with an Alembic migration; a `NotificationService` with "create", "list (paginated)", "unread count" and "mark read"; `GET /api/notifications`, `GET /api/notifications/unread-count`, `POST /api/notifications/{id}/read`; rows written inside the **existing** transitions (order paid, order cancelled, order expired, refund required) in the same transaction, so no Phase 6/7 behaviour changes and a failed write cannot half-apply; a `/dashboard/notifications` page and an unread badge fetched on navigation (no polling or sockets). Email/SMS/push would be a separate, later step.
+- Invoices: "Invoice" not "Tax Invoice"; order-level GST only (no CGST/SGST split, HSN or place of supply); seller details are blank until configured; the customer's email on the invoice is the account's current email (orders store no customer snapshot); refunded orders get 409 (no credit note); non-Latin text prints as `?` (shipping a Unicode font would fix it).
+- Profile email is read-only (no email verification flow).
+- Saved addresses: at most 20 per user; the page does not show which orders used an address.
+- Wishlist: at most 100 products; product images are not rendered (none exist in the shop yet); hearts show nothing outside a `WishlistProvider`.
+- Layout details (heart position, price-row spacing) are CSS and are covered by manual checks, not unit tests.
+- Carried over from earlier phases and unchanged: refunds are manual, per-user coupon limits do not exist, GST is a flat 5%, no rate limiting on payment endpoints, no shipping/fulfilment states.
+
+### Files changed in Phase 8 (see `PHASE8_COMPLETION_REPORT.md` for the full list)
+
+Backend new: `app/api/{wishlist,invoices}.py`, `app/services/{user_service,wishlist_service,invoice_service,invoice_data,invoice_pdf}.py`, `app/repositories/{wishlist_repository,invoice_repository}.py`, `app/schemas/{wishlist,invoice}.py`, tests `test_p8_{profile,addresses,wishlist,invoice,security}.py`. Backend modified: `app/api/{users,addresses}.py`, `app/services/address_service.py`, `app/repositories/address_repository.py`, `app/schemas/{user,address}.py`, `app/core/{config,exceptions}.py`, `app/main.py`, `.env.example`, `requirements.txt`. No file deleted.
+
+### Notes for later phases
+
+- Phase 9 (Admin Dashboard) is the natural home for the refund workflow, shipping/fulfilment states, and for notifications if they are built there. Any admin or dashboard stock editing must refuse a quantity below `reserved_quantity`.
+- If a credit note or a legally compliant GST invoice is needed, it needs an accountant's input, a separate invoice-number sequence and its own migration; do not retrofit it onto the order number.
+- Going live is still a separate, deliberate step (see Phase 7 notes); fill in the `INVOICE_SELLER_*` values first.
 
 ## Original Roadmap
 
@@ -546,3 +667,4 @@ Do not implement these before the appropriate phase unless explicitly requested.
 11. Do not commit unrelated working-tree changes.
 12. Do not begin the next phase until the current phase has been verified and closed.
 13. Never expose or commit payment secrets; use Razorpay TEST MODE until a deliberate go-live.
+14. Account (customer-facing) routes take their owner from the access token only, never from a user id the caller sends; keep `tests/test_p8_security.py` up to date when one is added.

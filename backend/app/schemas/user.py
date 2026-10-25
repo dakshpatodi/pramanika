@@ -78,3 +78,34 @@ class UserResponse(BaseModel):
     is_verified: bool
     last_login: Optional[datetime] = None
     created_at: datetime
+
+
+class UserUpdateRequest(BaseModel):
+    """Profile edit (PATCH /api/users/me).
+
+    Only the fields a customer may change are listed, and any OTHER key is
+    refused with a 422 (`extra="forbid"`) instead of being silently ignored:
+    `id`, `email` (the login identity - changing it needs a verification flow
+    that does not exist), `role`, `is_active`, `is_verified` and the password
+    hash can never be set through this request. Send only what changes; a
+    field that is present must be valid (it is never "cleared").
+    """
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    first_name: Optional[str] = Field(default=None, min_length=1, max_length=100)
+    last_name: Optional[str] = Field(default=None, min_length=1, max_length=100)
+    phone_number: Optional[str] = Field(
+        default=None,
+        pattern=_PHONE_PATTERN,
+        description="Digits only, optional leading '+', e.g. +919876543210",
+    )
+
+    @model_validator(mode="after")
+    def _something_to_change(self) -> "UserUpdateRequest":
+        if not self.model_fields_set:
+            raise ValueError("Send at least one field to update.")
+        for name in self.model_fields_set:
+            if getattr(self, name) is None:
+                raise ValueError(f"{name} cannot be null.")
+        return self

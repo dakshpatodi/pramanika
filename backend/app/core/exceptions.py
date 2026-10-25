@@ -278,3 +278,36 @@ class WebhookTooLargeError(DomainError):
 
     def __init__(self):
         super().__init__("Webhook payload is too large.")
+
+
+class AddressLimitReachedError(DomainError):
+    """The customer already has the maximum number of saved addresses (409).
+    The list endpoint is never unbounded: delete one to add another."""
+
+    http_status = 409
+
+    def __init__(self, limit: int):
+        super().__init__(
+            f"You can save up to {limit} addresses. Delete one you no longer use to add another."
+        )
+
+
+class WishlistFullError(DomainError):
+    """The wishlist already holds the maximum number of products (409).
+    Like saved addresses, the list is bounded: remove one to add another."""
+
+    http_status = 409
+
+    def __init__(self, limit: int):
+        super().__init__(
+            f"Your wishlist can hold up to {limit} products. Remove one you no longer want to add another."
+        )
+
+class InvoiceNotAvailableError(DomainError):
+    """An invoice exists only for an order that has been paid (409). A missing
+    or someone else's order is a plain OrderNotFoundError (404) instead."""
+
+    http_status = 409
+
+    def __init__(self):
+        super().__init__("An invoice is available once the order has been paid.")

@@ -14,6 +14,7 @@ from pydantic import Field, SecretStr, computed_field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 MIN_WEBHOOK_SECRET_LENGTH = 16
+GSTIN_PATTERN = re.compile(r"^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$")
 
 class Settings(BaseSettings):
     # --- App metadata ---
@@ -92,6 +93,20 @@ class Settings(BaseSettings):
     ORDER_EXPIRY_BATCH_SIZE: int = Field(default=50, ge=1, le=500)
     """How many due orders one pass handles before looking again."""
 
+    # --- Phase 8: invoice PDF ---
+    # The seller's details printed on invoices. All optional and EMPTY by default:
+    # nothing is invented. Whatever is left blank is simply not printed. Fill in
+    # real, legally correct details before sending invoices to customers.
+    INVOICE_SELLER_NAME: str = ""
+    """Registered name of the business, e.g. the legal entity that sells."""
+    INVOICE_SELLER_ADDRESS: str = ""
+    """Business address on one line; use " | " where you want a line break."""
+    INVOICE_SELLER_GSTIN: str = ""
+    """15-character GSTIN, printed only if set. The format is checked at startup
+    (a typo on an invoice is worse than no number); the check digit is not."""
+    INVOICE_SELLER_EMAIL: str = ""
+    """Support / billing contact printed on the invoice."""
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
@@ -156,6 +171,19 @@ class Settings(BaseSettings):
         local_http = re.match(r"^http://(localhost|127\.0\.0\.1)(:\d+)?(/|$)", base)
         if not (base.startswith("https://") or local_http):
             raise ValueError("RAZORPAY_API_BASE_URL must start with https:// (http:// only for localhost).")
+        return self
+
+    @model_validator(mode="after")
+    def _validate_invoice_settings(self) -> "Settings":
+        for name, limit in (("INVOICE_SELLER_NAME", 120), ("INVOICE_SELLER_ADDRESS", 300), ("INVOICE_SELLER_EMAIL", 120)):
+            value = getattr(self, name).strip()
+            if len(value) > limit:
+                raise ValueError(f"{name} is too long (maximum {limit} characters).")
+            object.__setattr__(self, name, value)
+        gstin = self.INVOICE_SELLER_GSTIN.strip().upper()
+        if gstin and not GSTIN_PATTERN.match(gstin):
+            raise ValueError("INVOICE_SELLER_GSTIN must be a 15-character GSTIN such as 22AAAAA0000A1Z5, or empty.")
+        object.__setattr__(self, "INVOICE_SELLER_GSTIN", gstin)
         return self
 
     @model_validator(mode="after")

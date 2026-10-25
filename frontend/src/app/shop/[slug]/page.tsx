@@ -7,6 +7,7 @@ import { AlertTriangle, ArrowLeft, Check, Minus, Plus, ShoppingCart, XCircle } f
 
 import { ProductCard } from "@/components/products/ProductCard";
 import { Button } from "@/components/ui/button";
+import { WishlistButton } from "@/components/wishlist/WishlistButton";
 import { useAuth } from "@/context/AuthContext";
 import { useCart } from "@/context/CartContext";
 import { getCategoryIcon } from "@/lib/category-icons";
@@ -238,6 +239,8 @@ export default function ProductDetailPage() {
                 </p>
               )
             ) : null}
+
+            <WishlistButton variant="text" productId={product.id} productName={product.name} redirectTo={pathname} />
 
             <dl className="grid grid-cols-2 gap-4 border-t border-border pt-5 text-sm">
               <div>

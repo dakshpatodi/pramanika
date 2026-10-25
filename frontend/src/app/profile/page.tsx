@@ -1,9 +1,12 @@
 "use client";
 
-import { CalendarDays, Clock, LogOut, Mail, Phone, ShieldCheck } from "lucide-react";
+import { CalendarDays, Clock, LogOut, ShieldCheck } from "lucide-react";
 
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
+import { DashboardShell } from "@/components/dashboard/DashboardShell";
+import { ProfileForm } from "@/components/dashboard/ProfileForm";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { useAuth } from "@/context/AuthContext";
 
 function formatDate(value: string | null): string {
@@ -27,23 +30,21 @@ function ProfileContent() {
   const fullName = `${user.first_name} ${user.last_name}`;
   const initials = `${user.first_name[0] ?? ""}${user.last_name[0] ?? ""}`.toUpperCase();
 
-  const details = [
-    { icon: Mail, label: "Email", value: user.email },
-    { icon: Phone, label: "Phone", value: user.phone_number },
+  const facts = [
     { icon: CalendarDays, label: "Member since", value: formatDate(user.created_at) },
     { icon: Clock, label: "Last login", value: formatDate(user.last_login) },
   ];
 
   return (
-    <div className="container flex justify-center py-16">
-      <div className="w-full max-w-2xl">
-        <div className="rounded-2xl border border-border bg-card p-8 shadow-card">
-          <div className="flex flex-col items-center gap-4 border-b border-border pb-8 text-center sm:flex-row sm:text-left">
+    <DashboardShell title="Profile" description="See and update the details on your account.">
+      <div className="flex max-w-2xl flex-col gap-6">
+        <Card className="p-6">
+          <div className="flex flex-col items-center gap-4 text-center sm:flex-row sm:text-left">
             <span className="flex h-20 w-20 shrink-0 items-center justify-center rounded-blob bg-primary text-2xl font-semibold text-primary-foreground">
               {initials}
             </span>
             <div className="flex flex-col gap-2">
-              <h1 className="font-display text-2xl font-semibold text-foreground">{fullName}</h1>
+              <p className="font-display text-2xl font-semibold text-foreground">{fullName}</p>
               <div className="flex flex-wrap items-center justify-center gap-2 sm:justify-start">
                 <span className="rounded-full bg-primary-light px-3 py-1 text-xs font-semibold capitalize text-primary">
                   {user.role}
@@ -66,8 +67,8 @@ function ProfileContent() {
             </div>
           </div>
 
-          <dl className="grid grid-cols-1 gap-5 py-8 sm:grid-cols-2">
-            {details.map(({ icon: Icon, label, value }) => (
+          <dl className="mt-6 grid grid-cols-1 gap-5 border-t border-border pt-6 sm:grid-cols-2">
+            {facts.map(({ icon: Icon, label, value }) => (
               <div key={label} className="flex items-start gap-3">
                 <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-muted text-muted-foreground">
                   <Icon className="h-4 w-4" />
@@ -79,16 +80,21 @@ function ProfileContent() {
               </div>
             ))}
           </dl>
+        </Card>
 
-          <div className="border-t border-border pt-6">
-            <Button variant="outline" size="md" onClick={() => logout()} className="gap-2">
-              <LogOut className="h-4 w-4" />
-              Log Out
-            </Button>
-          </div>
+        <Card className="p-6">
+          <h2 className="mb-5 font-display text-xl font-semibold text-foreground">Edit details</h2>
+          <ProfileForm />
+        </Card>
+
+        <div>
+          <Button variant="outline" size="md" onClick={() => logout()} className="gap-2">
+            <LogOut className="h-4 w-4" />
+            Log Out
+          </Button>
         </div>
       </div>
-    </div>
+    </DashboardShell>
   );
 }
 

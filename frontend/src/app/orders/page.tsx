@@ -5,6 +5,7 @@ import Link from "next/link";
 import { PackageOpen } from "lucide-react";
 
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
+import { DashboardShell } from "@/components/dashboard/DashboardShell";
 import { OrderStatusBadge } from "@/components/orders/OrderStatusBadge";
 import { Button } from "@/components/ui/button";
 import { useOrders } from "@/hooks/useOrders";
@@ -125,12 +126,7 @@ function OrdersContent() {
     );
   }
 
-  return (
-    <div className="container flex flex-col gap-6 py-12">
-      <h1 className="font-display text-3xl font-semibold text-foreground">Your orders</h1>
-      {body}
-    </div>
-  );
+  return <DashboardShell title="Your orders">{body}</DashboardShell>;
 }
 
 export default function OrdersPage() {

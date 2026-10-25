@@ -2,7 +2,7 @@
  * Types mirroring the backend's Phase 6 address schemas
  * (app/schemas/address.py). Keep in sync manually.
  *
- * Phase 6 scope: list + add only. Delivery is India-only for now, so the
+ * Delivery is India-only for now, so the
  * server always stores country "India" and the request has no country
  * field; the PIN code must be six digits and cannot start with 0.
  */
@@ -34,4 +34,17 @@ export interface AddressInput {
   postal_code: string;
   /** Make this the default address (the first address is always the default). */
   is_default?: boolean;
+}
+
+/** Body of PATCH /api/addresses/{id}: only the fields that changed. `address_line_2`
+ * may be null to clear it; every other field is required on a saved address.
+ * There is no `is_default` here - the default moves through its own endpoint. */
+export interface AddressUpdateInput {
+  full_name?: string;
+  phone_number?: string;
+  address_line_1?: string;
+  address_line_2?: string | null;
+  city?: string;
+  state?: string;
+  postal_code?: string;
 }

@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { getApiErrorMessage } from "@/lib/errors";
 import * as addressApi from "@/services/addresses";
-import type { Address, AddressInput } from "@/types/address";
+import type { Address, AddressInput, AddressUpdateInput } from "@/types/address";
 
 export interface UseAddresses {
   /** The user's addresses, default first; null until the first load finishes. */
@@ -18,10 +18,16 @@ export interface UseAddresses {
    * server's validation message is in the error). The list is reloaded so
    * the default flag stays right when the new address became the default. */
   addAddress: (input: AddressInput) => Promise<Address>;
+  /** Saves the changed fields of one address and resolves with it; REJECTS on failure. */
+  updateAddress: (id: string, input: AddressUpdateInput) => Promise<Address>;
+  /** Makes one address the default; REJECTS on failure. */
+  makeDefault: (id: string) => Promise<void>;
+  /** Deletes one address (the server promotes another default if needed); REJECTS on failure. */
+  removeAddress: (id: string) => Promise<void>;
 }
 
 /**
- * Loads the logged-in user's addresses and adds new ones. Forgets
+ * Loads the logged-in user's addresses and changes them. Forgets
  * everything when the user changes, and ignores a response that arrives
  * after a newer request (or after logout).
  */
@@ -63,6 +69,16 @@ export function useAddresses(): UseAddresses {
     void reload();
   }, [userId, isAuthLoading, reload]);
 
+  /** Show what the server just answered, unless the user changed meanwhile. Also
+   * cancels any older list request still in flight so it cannot overwrite this. */
+  const apply = useCallback((owner: string | null, update: (current: Address[] | null) => Address[] | null) => {
+    if (ownerRef.current !== owner) return;
+    requestRef.current += 1;
+    setIsLoading(false);
+    setLoadError(null);
+    setAddresses(update);
+  }, []);
+
   const addAddress = useCallback(
     async (input: AddressInput): Promise<Address> => {
       const created = await addressApi.createAddress(input);
@@ -72,5 +88,33 @@ export function useAddresses(): UseAddresses {
     [reload]
   );
 
-  return { addresses, isLoading, loadError, reload, addAddress };
+  const updateAddress = useCallback(
+    async (id: string, input: AddressUpdateInput): Promise<Address> => {
+      const owner = ownerRef.current;
+      const updated = await addressApi.updateAddress(id, input);
+      apply(owner, (current) => (current ? current.map((a) => (a.id === updated.id ? updated : a)) : current));
+      return updated;
+    },
+    [apply]
+  );
+
+  const makeDefault = useCallback(
+    async (id: string): Promise<void> => {
+      const owner = ownerRef.current;
+      const list = await addressApi.setDefaultAddress(id);
+      apply(owner, () => list);
+    },
+    [apply]
+  );
+
+  const removeAddress = useCallback(
+    async (id: string): Promise<void> => {
+      const owner = ownerRef.current;
+      const list = await addressApi.deleteAddress(id);
+      apply(owner, () => list);
+    },
+    [apply]
+  );
+
+  return { addresses, isLoading, loadError, reload, addAddress, updateAddress, makeDefault, removeAddress };
 }

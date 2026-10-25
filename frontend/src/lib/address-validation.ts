@@ -4,12 +4,16 @@
  * validates again and its message is shown if it disagrees.
  */
 
-import type { AddressInput } from "@/types/address";
+import type { Address, AddressInput, AddressUpdateInput } from "@/types/address";
 
 /** Same loose international rule as registration: optional "+", then 7-15 digits, not starting with 0. */
 export const PHONE_PATTERN = /^\+?[1-9]\d{6,14}$/;
 /** Six-digit Indian PIN code, never starting with 0. */
 export const PIN_PATTERN = /^[1-9][0-9]{5}$/;
+
+/** How many addresses one account may save. The server enforces it (409); this only
+ * lets the page say so before the user fills in a form. */
+export const MAX_ADDRESSES = 20;
 
 export type AddressField = "full_name" | "phone_number" | "address_line_1" | "address_line_2" | "city" | "state" | "postal_code";
 export type AddressErrors = Partial<Record<AddressField, string>>;
@@ -64,4 +68,23 @@ export function toAddressInput(values: Pick<AddressInput, AddressField>, isDefau
     postal_code: values.postal_code.trim(),
     is_default: isDefault,
   };
+}
+
+const EDITABLE: AddressField[] = ["full_name", "phone_number", "address_line_1", "address_line_2", "city", "state", "postal_code"];
+
+/** What PATCH should carry: only fields whose trimmed value differs from the saved address.
+ * Clearing the optional second line is sent as null. Empty result = nothing to save. */
+export function diffAddress(saved: Address, edited: AddressInput): AddressUpdateInput {
+  const next = toAddressInput(edited, false);
+  const changes: AddressUpdateInput = {};
+  for (const field of EDITABLE) {
+    if (field === "address_line_2") {
+      const before = saved.address_line_2 ?? null;
+      const after = next.address_line_2 ?? null;
+      if (before !== after) changes.address_line_2 = after;
+    } else if (next[field] !== saved[field]) {
+      changes[field] = next[field];
+    }
+  }
+  return changes;
 }

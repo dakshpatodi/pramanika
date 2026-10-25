@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
+import { DashboardShell } from "@/components/dashboard/DashboardShell";
+import { InvoiceDownloadButton } from "@/components/invoices/InvoiceDownloadButton";
 import { OrderPaymentPanel } from "@/components/orders/OrderPaymentPanel";
 import { OrderStatusBadge } from "@/components/orders/OrderStatusBadge";
 import { Banner } from "@/components/ui/banner";
@@ -222,6 +224,9 @@ function OrderDetails({ order, isCancelling, cancelError, onCancel, onReload }: 
         <Button variant="primary" asChild>
           <Link href="/shop">Continue shopping</Link>
         </Button>
+        {order.payment_status === "paid" ? (
+          <InvoiceDownloadButton orderId={order.id} orderNumber={order.order_number} />
+        ) : null}
         <Button variant="outline" asChild>
           <Link href="/orders">All orders</Link>
         </Button>
@@ -266,7 +271,7 @@ function OrderContent() {
     body = <OrderSkeleton />;
   }
 
-  return <div className="container py-12">{body}</div>;
+  return <DashboardShell>{body}</DashboardShell>;
 }
 
 export default function OrderPage() {

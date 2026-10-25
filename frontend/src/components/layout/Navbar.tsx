@@ -69,7 +69,7 @@ export function Navbar() {
           ) : isAuthenticated && user ? (
             <div className="hidden items-center gap-2 sm:flex">
               <Button variant="ghost" size="md" asChild>
-                <Link href="/profile" className="flex items-center gap-2">
+                <Link href="/dashboard" className="flex items-center gap-2">
                   <UserIcon className="h-4 w-4" />
                   {user.first_name}
                 </Link>
@@ -123,7 +123,7 @@ export function Navbar() {
           {isLoading ? null : isAuthenticated && user ? (
             <div className="mt-2 flex flex-col gap-2">
               <Button variant="outline" size="md" className="w-full" asChild onClick={() => setIsMenuOpen(false)}>
-                <Link href="/profile" className="flex items-center justify-center gap-2">
+                <Link href="/dashboard" className="flex items-center justify-center gap-2">
                   <UserIcon className="h-4 w-4" />
                   {user.first_name}
                 </Link>

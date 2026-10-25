@@ -18,6 +18,12 @@ interface AuthContextValue {
   login: (email: string, password: string, rememberMe?: boolean) => Promise<void>;
   register: (payload: RegisterPayload) => Promise<User>;
   logout: () => Promise<void>;
+  /** Replaces the signed-in user's profile with a fresher copy from the
+   * server (e.g. after editing their name), so every consumer such as the
+   * Navbar updates without a reload. Ignored when nobody is signed in or
+   * the copy belongs to a different account, so a response that arrives
+   * after logout can never sign anyone back in. */
+  updateUser: (next: User) => void;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -95,8 +101,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     router.push("/login");
   }, [router]);
 
+  const updateUser = useCallback((next: User) => {
+    setUser((current) => (current !== null && current.id === next.id ? next : current));
+  }, []);
+
   return (
-    <AuthContext.Provider value={{ user, isLoading, isAuthenticated: user !== null, login, register, logout }}>
+    <AuthContext.Provider
+      value={{ user, isLoading, isAuthenticated: user !== null, login, register, logout, updateUser }}
+    >
       {children}
     </AuthContext.Provider>
   );

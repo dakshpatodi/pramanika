@@ -10,7 +10,7 @@ repositories it only stages changes; the service commits.
 import uuid
 from typing import List, Optional
 
-from sqlalchemy import update
+from sqlalchemy import delete, update
 from sqlalchemy.orm import Session
 
 from app.models import Address, User
@@ -58,3 +58,26 @@ class AddressRepository:
         self.db.add(address)
         self.db.flush()  # assigns id / timestamps without committing
         return address
+
+    def newest_for_user(self, user_id: uuid.UUID) -> Optional[Address]:
+        """The most recently added address (Phase 8: it becomes the default
+        when the default one is deleted)."""
+        return (
+            self.db.query(Address)
+            .filter(Address.user_id == user_id)
+            .order_by(Address.created_at.desc(), Address.id.asc())
+            .first()
+        )
+
+    def delete_for_user(self, address_id: uuid.UUID, user_id: uuid.UUID) -> int:
+        """Delete with a plain DELETE statement (returns the row count), NOT
+        `session.delete()`: the ORM would load every order that points at the
+        address and rewrite it. The database's own `ON DELETE SET NULL` clears
+        `orders.shipping_address_id` and nothing else - the order keeps its
+        copy of the delivery address and is not modified by Python at all."""
+        result = self.db.execute(
+            delete(Address)
+            .where(Address.id == address_id, Address.user_id == user_id)
+            .execution_options(synchronize_session=False)
+        )
+        return result.rowcount

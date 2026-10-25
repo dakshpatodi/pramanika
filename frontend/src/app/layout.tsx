@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { AuthProvider } from "@/context/AuthContext";
 import { CartProvider } from "@/context/CartContext";
+import { WishlistProvider } from "@/context/WishlistContext";
 import { Fraunces, Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 
@@ -40,9 +41,11 @@ export default function RootLayout({
       <body>
        <AuthProvider>
         <CartProvider>
-          <Navbar />
-          <main>{children}</main>
-          <Footer />
+          <WishlistProvider>
+            <Navbar />
+            <main>{children}</main>
+            <Footer />
+          </WishlistProvider>
         </CartProvider>
        </AuthProvider>
       </body>
