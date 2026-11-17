@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/context/AuthContext";
 import { getApiErrorMessage } from "@/lib/errors";
+import { safeRedirectPath } from "@/lib/safe-redirect";
 import { loginSchema, type LoginFormValues } from "@/lib/validations/auth";
 
 function LoginForm() {
@@ -40,8 +41,8 @@ function LoginForm() {
       // If ProtectedRoute redirected here from somewhere (e.g. /profile),
       // send the user back there instead of always landing on the
       // homepage - see components/auth/ProtectedRoute.tsx.
-      const redirectTo = searchParams.get("redirect") ?? "/";
-      router.push(redirectTo);
+      // The value is untrusted (it comes from the address bar), so only a path on this site is followed.
+      router.push(safeRedirectPath(searchParams.get("redirect")));
     } catch (error) {
       setServerError(getApiErrorMessage(error, "Unable to log in. Please try again."));
     }

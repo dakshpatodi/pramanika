@@ -28,10 +28,10 @@ Phase 7 — Razorpay Integration
 Status: COMPLETE (verified in Razorpay TEST MODE on 2026-10-15; see "Phase 7 verification")
 
 Phase 8 — User Dashboard
-Status: IMPLEMENTED, PENDING VERIFICATION on the developer's machine (six of the seven features are built and passed in an independent sandbox; notifications are not built; see "Phase 8 verification". Notifications are deliberately deferred.) Do not start Phase 9 until this is verified and closed.
+Status: COMPLETE (verified on the developer's machine on 2026-10-25; see "Phase 8 verification"). Six of the seven features are built; notifications are deliberately deferred (see "Known limitations and the notifications gap").
 
 Phase 9 — Admin Dashboard
-Status: PLANNED
+Status: COMPLETE
 
 Phase 10 — AI & Advanced Features
 Status: PLANNED
@@ -502,7 +502,7 @@ NOT exercised (be honest about these):
 
 ## Phase 8 — User Dashboard
 
-Status: implemented; pending verification on the developer's machine (see "Phase 8 verification" below).
+Status: complete; verified on the developer's machine on 2026-10-25 (see "Phase 8 verification" below).
 
 Delivered as seven milestones (M1–M7). Phase 8 added **no database migration** (Alembic head is still `e4a91c7b3d26`), changed **no** payment, stock, coupon or pricing behaviour, and added **one** package (`fpdf2`).
 
@@ -580,7 +580,14 @@ Routes: `/dashboard`, `/profile`, `/orders`, `/orders/[id]`, `/dashboard/wishlis
 
 ### Phase 8 verification
 
-Run in an independent sandbox (a reconstruction of the project, with stand-ins for a few files that were not shared), 2026-10-25. **Not yet run on the developer's machine** — that run is what closes Phase 8.
+Verified on the developer's machine, 2026-10-25 (branch `feature/authentication`, Phase 8 committed as `57ea254`; working tree clean):
+
+- Backend, against the dedicated disposable `pramanika_test` database: full suite **927 passed, 0 skipped** (700 subtests) with pytest. This includes the 166 Phase 8 tests and the check that the real `app.main` mounts every account route. Run with `TEST_DATABASE_URL` set; without it the PostgreSQL integration tests skip (one skip per class), so a bare run reports far fewer tests.
+- `alembic check` against the development database: "No new upgrade operations detected."
+- Frontend: `npx tsc --noEmit` clean; Vitest **46 files, 513 tests passed** (273 at the close of Phase 7 + 240 in Phase 8); `npm run lint`: no warnings or errors; `npm run build`: succeeded, 17/17 pages, including `/dashboard`, `/dashboard/wishlist`, `/dashboard/addresses` and `/dashboard/invoices` (`/orders/[id]` and `/shop/[slug]` dynamic).
+- `phase6_smoke_test.ps1` and the browser checklist (profile edit; saved addresses; an order keeping its address after the address is edited or deleted; hearts and the wishlist page; invoice PDF for a paid Razorpay TEST order and the 409 message on an unpaid one; narrow window; API-down error states; logged-out redirect): reported as done by the developer on 2026-10-25. The individual results were not recorded here.
+
+Earlier, in an independent sandbox (a reconstruction of the project with stand-ins for a few files that were not shared), 2026-10-25:
 
 Backend (sandbox, dedicated PostgreSQL test database):
 - Full suite: 927 tests, OK, 1 skipped (761 at the close of Phase 7 + 166 in Phase 8: profile 22, addresses 42, wishlist 35, invoices 57, security 10). The skipped test checks that the real `app.main` mounts every account route; it skips only when the checkout's `app.main` cannot be imported or mounts no API routes, so it should run (and pass) on the developer's machine.
@@ -594,10 +601,7 @@ Frontend (sandbox, against the developer's real UI primitives, Navbar, AuthConte
 - Mutation checks: 22 (M4), 40 (M5) and 57 (M6) deliberate bugs, all caught after the weak tests they exposed were strengthened.
 - No existing Phase 5–7 test was modified or removed. Two later milestones (M5 and M6) updated assertions in two earlier *Phase 8* tests (`dashboard-shell`, `dashboard-overview`) that had asserted a menu or tile that was still to come.
 
-NOT run, and to be done by the developer:
-- `npm run build`, the project's real `npm run lint`, the full backend suite and `phase6_smoke_test.ps1` on the real machine and database, and `alembic check` against the real database.
-- Any real-browser check: hearts and layout at about 360 px, a real PDF download opened in a viewer, the expired-session path, checkout still placing an order after editing or deleting an address.
-- A paid order in Razorpay TEST MODE followed by an invoice download (the invoice depends on the stored capture time).
+Not covered by any automated test (checked by hand, see above): heart position and price-row spacing at narrow widths, a real PDF opened in a viewer, the expired-session path, and an invoice for a real paid Razorpay TEST order.
 
 ### Known limitations and the notifications gap
 
@@ -619,6 +623,7 @@ Backend new: `app/api/{wishlist,invoices}.py`, `app/services/{user_service,wishl
 - Phase 9 (Admin Dashboard) is the natural home for the refund workflow, shipping/fulfilment states, and for notifications if they are built there. Any admin or dashboard stock editing must refuse a quantity below `reserved_quantity`.
 - If a credit note or a legally compliant GST invoice is needed, it needs an accountant's input, a separate invoice-number sequence and its own migration; do not retrofit it onto the order number.
 - Going live is still a separate, deliberate step (see Phase 7 notes); fill in the `INVOICE_SELLER_*` values first.
+- Running the backend integration tests needs `TEST_DATABASE_URL` pointing at a disposable database whose name contains "test" (`pramanika_test`); migrate it with `alembic upgrade head` first, and unset `DATABASE_URL` / `TEST_DATABASE_URL` afterwards so a dev server is not started against the test database.
 
 ## Original Roadmap
 
@@ -668,3 +673,44 @@ Do not implement these before the appropriate phase unless explicitly requested.
 12. Do not begin the next phase until the current phase has been verified and closed.
 13. Never expose or commit payment secrets; use Razorpay TEST MODE until a deliberate go-live.
 14. Account (customer-facing) routes take their owner from the access token only, never from a user id the caller sends; keep `tests/test_p8_security.py` up to date when one is added.
+
+
+## Phase 9 - Admin Dashboard (COMPLETE)
+
+*Paste this section into `PROJECT_CONTEXT.md` after Phase 8.*
+
+**Status:** built in nine milestones (M1-M9). Phases 1-8 behaviour is unchanged.
+
+### What exists
+- **Backend API at `/api/admin`** (21 routes, all behind `require_admin`; role is read from the database on every request, so a promotion or demotion takes effect on the next request; 401 without a valid token, 403 for a non-admin):
+  - `GET /me`, `GET /dashboard`, `GET /audit-events`
+  - Categories: list, create, get, edit, `activate`, `deactivate`
+  - Products: list, create, get, edit, `activate`, `deactivate` (stock and `is_active` are never part of an edit)
+  - Inventory: list, get, `PATCH /{product_id}` (adjust: add / remove / count, plus the low-stock threshold)
+  - Orders: list, get, `POST /{order_id}/status` (forward-only fulfilment)
+- **Frontend `/admin`** (own layout, `AdminRoute` guard, menu: Overview, Orders, Products, Categories, Inventory): overview, products (list / new / edit), categories (list / new / edit), inventory (list / product stock page with adjust, threshold and history), orders (list / detail with fulfilment).
+- **Audit trail**: table `admin_audit_events`, append-only, written in the same transaction as the change it records; before/after hold only the changed fields; secret-looking keys are refused; timestamps use `clock_timestamp()` so concurrent writers order correctly.
+- **First administrator**: register normally, then `python -m scripts.create_admin you@example.com` (`--revoke`, `--list`). No admin sign-up endpoint, no default account. The last active administrator cannot be removed.
+
+### Rules decided in this phase
+- **Orders: fulfilment only.** confirmed -> processing -> shipped -> delivered, one step at a time, only for orders that are PAID with inventory CONSUMED. Repeating the current step is a quiet success with no audit row. No admin cancel, refund or mark-paid: cancellation and stock release stay with the customer / expiry flows of Phases 6-7.
+- **No deletes** anywhere (products, categories, orders): deactivate instead. A category with active products cannot be deactivated.
+- **Reserved stock is never editable** by an admin; reservations belong to checkout. Stock changes are applied as deltas on the current value (conditional UPDATE); a "count" sends the expected number and is refused if stock moved.
+- **Money is text** in requests and responses (never a float).
+- **Frontend checks are convenience only**; the server re-validates and enforces everything.
+
+### Conventions added
+- Backend layering: router -> service -> repository; `DomainError` subclasses for refusals (`AdminValidationError` 422, `AdminConflictError` 409, `LastAdminError` 409, `AdminAccountError`, `AdminAccountNotFoundError`). `admin_transaction` commits or rolls back and maps `IntegrityError` to `AdminConflictError`.
+- Admin envelope: `{success, message, data}`; lists add `pagination {total, page, page_size, total_pages, has_next, has_previous}`; 422 adds an `errors` list with `loc` and `msg`.
+- Frontend: `useAdminAccess` (confirms the role through `GET /api/admin/me`), `useAdminQuery` (stale-response-safe loader), `ConfirmDialog` (accessible, focus-trapping), shared `ListStates`, `Select`, `Textarea`. Admin forms keep values as strings and send only changed fields.
+- `safeRedirectPath` (`src/lib/safe-redirect.ts`): the only way a `?redirect=` value may be followed.
+
+### Migration
+One: `f7b3c9d15a42` "admin audit events" (new table only; no existing table or row touched). `alembic check` is clean.
+
+### Tests (sandbox, disposable database)
+- Backend: 1158 passed + 5 environment-only failures (sandbox copy had no `.env.example` / `.gitignore`); expected on your machine: **1163 passed**.
+- Frontend: **849 passed** (513 before Phase 9).
+
+### Known limits
+See `PHASE9_FINAL_REPORT.md`, "Limitations".

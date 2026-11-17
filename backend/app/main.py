@@ -6,6 +6,8 @@ following in later milestones) plus the app-wide exception handlers that
 give every endpoint - success or failure - the same response envelope.
 
 Phase 4 adds the public product/category browsing routes.
+
+Phase 9 adds the administrator API at /api/admin (guarded by require_admin).
 """
 
 from fastapi import FastAPI, Request
@@ -21,6 +23,7 @@ from app.api import addresses
 from app.api import payments
 from app.api import wishlist
 from app.api import invoices
+from app.api.admin import router as admin_router
 from app.api.auth import router as auth_router
 from app.api.categories import router as categories_router
 from app.api.products import router as products_router
@@ -62,6 +65,7 @@ app.include_router(orders.router)
 app.include_router(payments.router)
 app.include_router(wishlist.router)
 app.include_router(invoices.router)
+app.include_router(admin_router)  # Phase 9: every route is behind require_admin
 
 # --- Exception handlers -----------------------------------------------
 # These four handlers are what make EVERY response - regardless of where

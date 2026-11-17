@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 
-import { Leaf, LogOut, Menu, Search, ShoppingCart, User as UserIcon, X } from "lucide-react";
+import { Leaf, LogOut, Menu, Search, ShieldCheck, ShoppingCart, User as UserIcon, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/context/AuthContext";
@@ -77,6 +77,14 @@ export function Navbar() {
               <Button variant="ghost" size="md" asChild>
                 <Link href="/orders">Orders</Link>
               </Button>
+              {user.role === "admin" ? (
+                <Button variant="ghost" size="md" asChild>
+                  <Link href="/admin" className="flex items-center gap-2">
+                    <ShieldCheck className="h-4 w-4" />
+                    Admin
+                  </Link>
+                </Button>
+              ) : null}
               <Button variant="outline" size="icon" aria-label="Log out" onClick={() => logout()}>
                 <LogOut className="h-4 w-4" />
               </Button>
@@ -105,7 +113,7 @@ export function Navbar() {
       <div
         className={cn(
           "overflow-hidden border-t border-border/80 bg-background transition-[max-height] duration-300 lg:hidden",
-          isMenuOpen ? "max-h-[28rem]" : "max-h-0 border-t-0"
+          isMenuOpen ? "max-h-[32rem]" : "max-h-0 border-t-0"
         )}
       >
         <nav className="container flex flex-col gap-1 py-3">
@@ -133,6 +141,14 @@ export function Navbar() {
                   Orders
                 </Link>
               </Button>
+              {user.role === "admin" ? (
+                <Button variant="outline" size="md" className="w-full" asChild onClick={() => setIsMenuOpen(false)}>
+                  <Link href="/admin" className="flex items-center justify-center gap-2">
+                    <ShieldCheck className="h-4 w-4" />
+                    Admin
+                  </Link>
+                </Button>
+              ) : null}
               <Button
                 variant="primary"
                 size="md"

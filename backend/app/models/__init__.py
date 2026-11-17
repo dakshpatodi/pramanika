@@ -1,4 +1,5 @@
 from app.models.address import Address
+from app.models.admin_audit import AdminAuditEvent
 from app.models.cart import Cart, CartItem
 from app.models.category import Category
 from app.models.coupon import Coupon, DiscountType
